@@ -33,10 +33,13 @@ struct TopBarView: View {
                     .foregroundStyle(Palette.text1)
             }
             .padding(.leading, 6)
+            .frame(height: Metrics.topBarHeight)
+            .background(WindowDragArea())
 
             searchField
 
             Spacer(minLength: 8)
+                .background(WindowDragArea())
 
             PlainIconButton(systemName: themeIcon, action: cycleTheme, help: "切换主题")
 
@@ -74,7 +77,6 @@ struct TopBarView: View {
         }
         .padding(.horizontal, 16)
         .frame(height: Metrics.topBarHeight)
-        .background(WindowDragArea())
         .background(Palette.bg)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Palette.line).frame(height: 1)
@@ -90,16 +92,21 @@ struct TopBarView: View {
 
     private var searchField: some View {
         HStack(spacing: 7) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 12))
-                .foregroundStyle(Palette.text3)
+            Button(action: submitSearch) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.text3)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("搜索")
             TextField("搜索视频、UP主", text: $query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(Palette.text1)
                 .focused($searchFocused)
                 .onSubmit {
-                    app.search(query)
+                    submitSearch()
                 }
             if !query.isEmpty {
                 Button {
@@ -116,9 +123,16 @@ struct TopBarView: View {
         .frame(width: 320, height: 30)
         .background(Palette.bgRegular)
         .clipShape(Capsule())
+        .contentShape(Capsule())
+        // 点击胶囊内任意位置（图标、留白）都聚焦输入框，避免点了却没反应。
+        .onTapGesture { searchFocused = true }
         .overlay {
             Capsule().stroke(searchFocused ? Palette.pink.opacity(0.6) : Color.clear, lineWidth: 1)
         }
+    }
+
+    private func submitSearch() {
+        app.search(query)
     }
 
     private var themeIcon: String {

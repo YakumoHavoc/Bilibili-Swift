@@ -36,6 +36,8 @@ struct DynamicView: View {
     @State private var allFollowings: [FollowingUser] = []
     @State private var lives: [FollowingLiveRoom] = []
     @State private var updatedMids: Set<Int> = []
+    /// 有新动态的 UP 主（取自动态流本身，不依赖关注列表首页）。
+    @State private var updateAuthors: [FollowingUser] = []
     @State private var commentTarget: DynamicItem?
     @State private var imageViewer: ImageViewerPayload?
     @State private var forwardTarget: DynamicDetailTarget?
@@ -231,6 +233,8 @@ struct DynamicView: View {
                 Button {
                     markSeen()
                     updatedMids = []
+                    updateAuthors = []
+                    applyFollowingsOrder()
                     if filter != .all {
                         filter = .all
                         Task { await reload() }
@@ -261,6 +265,7 @@ struct DynamicView: View {
                     Button {
                         markSeen(mid: user.id)
                         updatedMids.remove(user.id)
+                        updateAuthors.removeAll { $0.id == user.id }
                         applyFollowingsOrder()
                         app.navigate(.space(user.id))
                     } label: {
@@ -378,6 +383,18 @@ struct DynamicView: View {
             }
         }
         updatedMids = updated
+
+        // 关注列表只加载了首页（30 个），动态流里的 UP 往往不在其中，
+        // 这里用动态作者补全头像行，保证有更新的 UP 一定能显示出来并带标记。
+        var seenAuthors = Set<Int>()
+        updateAuthors = items.compactMap { item -> FollowingUser? in
+            guard let author = item.modules?.module_author,
+                  let mid = author.mid, updated.contains(mid),
+                  seenAuthors.insert(mid).inserted else { return nil }
+            return FollowingUser(id: mid,
+                                 name: author.name ?? "UP主",
+                                 face: ImageURL.fix(author.face))
+        }
         applyFollowingsOrder()
     }
 
@@ -402,12 +419,8 @@ struct DynamicView: View {
 
     /// 有新动态的 UP 主排到前面，其余保持关注列表原顺序。
     private func applyFollowingsOrder() {
-        guard !updatedMids.isEmpty else {
-            followings = allFollowings
-            return
-        }
-        followings = allFollowings.filter { updatedMids.contains($0.id) }
-            + allFollowings.filter { !updatedMids.contains($0.id) }
+        let updatedIds = Set(updateAuthors.map(\.id))
+        followings = updateAuthors + allFollowings.filter { !updatedIds.contains($0.id) }
     }
 
     private func loadMore() async {

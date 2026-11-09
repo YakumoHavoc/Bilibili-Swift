@@ -131,8 +131,7 @@ struct LiveView: View {
                 return
             }
             do {
-                let data = try await BiliAPI.followingLiveFeed()
-                rooms = (data.list ?? []).map { FollowingLiveRoom(dto: $0).asLiveRoom }
+                rooms = try await BiliAPI.allFollowingLiveRooms().map { $0.asLiveRoom }
                 canLoadMore = false
             } catch {
                 rooms = []

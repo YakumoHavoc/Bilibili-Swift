@@ -404,12 +404,29 @@ enum BiliAPI {
         )
     }
 
-    /// 关注的主播当前正在直播的列表
-    static func followingLiveFeed() async throws -> LiveFeedData {
+    /// 关注的主播当前正在直播的列表（接口每页最多 20 条，需要配合 page 翻页）
+    static func followingLiveFeed(page: Int = 1) async throws -> LiveFeedData {
         try await BiliClient.shared.get(
             "https://api.live.bilibili.com/relation/v1/feed/feed_list",
+            params: ["page": String(page)],
             referer: "https://live.bilibili.com/"
         )
+    }
+
+    /// 全部正在直播的已关注主播：逐页拉取，直到某页为空。
+    static func allFollowingLiveRooms() async throws -> [FollowingLiveRoom] {
+        var result: [FollowingLiveRoom] = []
+        var seen = Set<Int>()
+        var page = 1
+        while page <= 20 {
+            let data = try await followingLiveFeed(page: page)
+            let items = (data.list ?? []).map { FollowingLiveRoom(dto: $0) }
+            let unique = items.filter { $0.id != 0 && seen.insert($0.id).inserted }
+            result.append(contentsOf: unique)
+            if items.isEmpty || unique.isEmpty { break }
+            page += 1
+        }
+        return result
     }
 
     // MARK: - UP 主空间

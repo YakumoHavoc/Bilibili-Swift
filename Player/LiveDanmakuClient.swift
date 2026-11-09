@@ -57,6 +57,8 @@ final class LiveDanmakuClient {
 
     func disconnect() {
         stop()
+        // 断开后该客户端不再复用，释放 URLSession 的连接池与接收缓冲。
+        session.invalidateAndCancel()
     }
 
     private func stop() {

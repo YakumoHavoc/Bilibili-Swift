@@ -114,6 +114,8 @@ final class PlayerViewModel: ObservableObject {
 
     let player = AVPlayer()
     let mode: PlaybackMode
+    /// 每个播放窗口独立的录制标识，多个直播窗口可各自录制互不影响。
+    let recordingOwner = UUID()
 
     private var cid: Int?
     private var aid: Int?
@@ -135,6 +137,8 @@ final class PlayerViewModel: ObservableObject {
     private var replaySeq = 0
     /// 每次开播自增；旧的开播流程（预滚回调）据此失效，避免切歌后误播。
     private var playGeneration = 0
+    /// 定时上报观看进度到账号历史记录。
+    private var historyTask: Task<Void, Never>?
 
     init(mode: PlaybackMode, title: String, quality: Int) {
         self.mode = mode
@@ -202,6 +206,10 @@ final class PlayerViewModel: ObservableObject {
                 try await loadRecording(recording)
             }
             isLoading = false
+            // 视频/番剧播放时定时把进度写入账号历史记录。
+            if !isLive, !isRecordingPlayback {
+                startHistoryReporting()
+            }
         } catch {
             errorMessage = error.localizedDescription
             isLoading = false
@@ -302,6 +310,8 @@ final class PlayerViewModel: ObservableObject {
             player.replaceCurrentItem(with: item)
             startPlayback()
             isPlaying = true
+            // 进入直播间后上报一次，写入直播观看记录（登录后生效）。
+            Task { await BiliAPI.reportLiveEntry(roomID: roomID) }
         } catch {
             stop()
             throw error
@@ -343,12 +353,13 @@ final class PlayerViewModel: ObservableObject {
     // MARK: - 直播录制
 
     func toggleRecording() async {
-        if LiveRecorder.shared.isRecording {
-            await LiveRecorder.shared.stop()
+        if LiveRecorder.shared.isRecording(owner: recordingOwner) {
+            await LiveRecorder.shared.stop(owner: recordingOwner)
             return
         }
         guard let roomID = liveRoomID, let url = currentLiveURL else { return }
-        LiveRecorder.shared.start(roomID: roomID,
+        LiveRecorder.shared.start(owner: recordingOwner,
+                                  roomID: roomID,
                                   title: title,
                                   playlistURL: url,
                                   qn: selectedQuality)
@@ -833,14 +844,45 @@ final class PlayerViewModel: ObservableObject {
 
     func stop() {
         playGeneration += 1
+        reportHistoryBeforeStopping()
+        historyTask?.cancel()
+        historyTask = nil
         liveDanmaku?.disconnect()
         liveDanmaku = nil
-        if isLive, LiveRecorder.shared.isRecording {
-            Task { await LiveRecorder.shared.stop() }
+        if isLive, LiveRecorder.shared.isRecording(owner: recordingOwner) {
+            Task { await LiveRecorder.shared.stop(owner: recordingOwner) }
         }
         player.pause()
         player.replaceCurrentItem(with: nil)
         isPlaying = false
+    }
+
+    // MARK: - 历史记录上报
+
+    /// 每 15 秒把观看进度上报给账号，视频会出现在历史记录中。
+    private func startHistoryReporting() {
+        guard historyTask == nil else { return }
+        historyTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
+                guard let self, !Task.isCancelled else { return }
+                guard self.isPlaying, !self.isLive else { continue }
+                await self.reportHistory()
+            }
+        }
+    }
+
+    private func reportHistory() async {
+        guard episodeID == nil, let aid, let cid, currentTime > 1 else { return }
+        await BiliAPI.reportVideoHistory(aid: aid, cid: cid, progress: currentTime)
+    }
+
+    /// 暂停/关闭时补报一次，避免刚看几秒就退出丢失记录。
+    private func reportHistoryBeforeStopping() {
+        guard episodeID == nil, let aid, let cid else { return }
+        let progress = currentTime
+        guard progress > 1 else { return }
+        Task { await BiliAPI.reportVideoHistory(aid: aid, cid: cid, progress: progress) }
     }
 
     func seek(to seconds: Double) {
@@ -946,7 +988,8 @@ final class PlayerViewModel: ObservableObject {
         nextLiveLane += 1
 
         if let roomID = liveRoomID {
-            LiveRecorder.shared.recordDanmaku(roomID: roomID,
+            LiveRecorder.shared.recordDanmaku(owner: recordingOwner,
+                                              roomID: roomID,
                                               nickname: nickname,
                                               text: item.text,
                                               color: incoming.color,

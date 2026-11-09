@@ -473,4 +473,32 @@ enum BiliAPI {
             referer: "https://t.bilibili.com/\(refererID)"
         )
     }
+
+    // MARK: - 观看历史
+
+    /// 上报视频观看进度，写入账号的历史记录（登录后生效）。
+    static func reportVideoHistory(aid: Int, cid: Int, progress: Double) async {
+        _ = try? await BiliClient.shared.postForm(
+            "https://api.bilibili.com/x/v2/history/report",
+            params: [
+                "aid": String(aid),
+                "cid": String(cid),
+                "progress": String(max(0, Int(progress))),
+                "platform": "android"
+            ],
+            referer: "https://www.bilibili.com/video/av\(aid)"
+        )
+    }
+
+    /// 上报进入直播间，写入直播观看记录（登录后生效）。
+    static func reportLiveEntry(roomID: Int) async {
+        _ = try? await BiliClient.shared.postForm(
+            "https://api.live.bilibili.com/room/v1/Room/room_entry_action",
+            params: [
+                "room_id": String(roomID),
+                "platform": "web"
+            ],
+            referer: "https://live.bilibili.com/\(roomID)"
+        )
+    }
 }

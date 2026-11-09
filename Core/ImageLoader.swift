@@ -7,8 +7,8 @@ actor ImageLoader {
     private var inFlight: [String: Task<NSImage?, Never>] = [:]
 
     init() {
-        cache.countLimit = 400
-        cache.totalCostLimit = 120 * 1024 * 1024
+        cache.countLimit = 300
+        cache.totalCostLimit = 64 * 1024 * 1024
     }
 
     func load(_ urlString: String) async -> NSImage? {
@@ -36,7 +36,9 @@ actor ImageLoader {
         let image = await task.value
         inFlight[urlString] = nil
         if let image {
-            cache.setObject(image, forKey: key, cost: image.tiffRepresentation?.count ?? 0)
+            // 用像素占用估算成本，避免 tiffRepresentation 的额外编码开销。
+            let cost = Int(image.size.width * image.size.height * 4)
+            cache.setObject(image, forKey: key, cost: cost)
         }
         return image
     }

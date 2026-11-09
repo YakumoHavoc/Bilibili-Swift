@@ -5,13 +5,25 @@ import SwiftUI
 final class PlayerWindowController: NSObject, NSWindowDelegate {
     static let shared = PlayerWindowController()
 
-    private var window: NSWindow?
-    private var currentViewModel: PlayerViewModel?
+    /// 最多同时存在的播放窗口数（视频、直播共用）。
+    static let maxWindows = 3
+
+    private final class PlayerWindow {
+        let window: NSWindow
+        let viewModel: PlayerViewModel
+
+        init(window: NSWindow, viewModel: PlayerViewModel) {
+            self.window = window
+            self.viewModel = viewModel
+        }
+    }
+
+    private var windows: [PlayerWindow] = []
     private var keyMonitor: Any?
 
     override init() {
         super.init()
-        // 空格与键盘媒体键（播放/暂停）控制播放器；仅播放器窗口为前台时生效。
+        // 空格与键盘媒体键（播放/暂停）控制播放器；仅当前活动的播放器窗口生效。
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .systemDefined]) { [weak self] event in
             // NSEvent 不是 Sendable，只把基本类型传入主线程判断，避免跨隔离域捕获。
             let type = event.type.rawValue
@@ -33,10 +45,11 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
     /// 返回 true 表示该按键已被播放器消费。
     private func handleShortcut(type: UInt, keyCode: UInt16, modifiers: UInt,
                                 subtype: Int16, data1: Int) -> Bool {
-        guard let window, window.isKeyWindow, window.attachedSheet == nil else { return false }
+        guard let target = windows.first(where: { $0.window.isKeyWindow }),
+              target.window.attachedSheet == nil else { return false }
         // 避免拦截输入框/菜单中的按键。
-        if window.firstResponder is NSText { return false }
-        guard let viewModel = currentViewModel else { return false }
+        if target.window.firstResponder is NSText { return false }
+        let viewModel = target.viewModel
 
         if type == NSEvent.EventType.keyDown.rawValue {
             let flags = NSEvent.ModifierFlags(rawValue: modifiers)
@@ -82,43 +95,51 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
     }
 
     private func present(mode: PlaybackMode, title: String, app: AppState) {
-        currentViewModel?.stop()
+        guard windows.count < Self.maxWindows else {
+            app.showToast("最多同时播放 \(Self.maxWindows) 个窗口，请先关闭一个")
+            return
+        }
 
+        let displayTitle = title.isEmpty ? "哔哩哔哩" : title
         let viewModel = PlayerViewModel(mode: mode,
-                                        title: title.isEmpty ? "哔哩哔哩" : title,
+                                        title: displayTitle,
                                         quality: app.playQuality)
-        currentViewModel = viewModel
-
         let root = PlayerView(viewModel: viewModel)
             .environmentObject(app)
         let hosting = NSHostingView(rootView: root)
 
-        if let window {
-            window.contentView = hosting
-            window.title = title.isEmpty ? "哔哩哔哩" : title
-            window.makeKeyAndOrderFront(nil)
-        } else {
-            let newWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 1180, height: 860),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                backing: .buffered,
-                defer: false
-            )
-            newWindow.title = title.isEmpty ? "哔哩哔哩" : title
-            newWindow.titleVisibility = .visible
-            newWindow.minSize = NSSize(width: 900, height: 620)
-            newWindow.isReleasedWhenClosed = false
-            newWindow.backgroundColor = NSColor.black
-            newWindow.contentView = hosting
-            newWindow.delegate = self
-            newWindow.center()
-            window = newWindow
-            newWindow.makeKeyAndOrderFront(nil)
+        let newWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1180, height: 860),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        newWindow.title = displayTitle
+        newWindow.titleVisibility = .visible
+        newWindow.minSize = NSSize(width: 900, height: 620)
+        newWindow.isReleasedWhenClosed = false
+        newWindow.backgroundColor = NSColor.black
+        newWindow.contentView = hosting
+        newWindow.delegate = self
+        newWindow.center()
+        // 多窗口时依次错开，避免完全重叠。
+        if !windows.isEmpty {
+            let offset = CGFloat(windows.count) * 28
+            newWindow.setFrameOrigin(NSPoint(x: newWindow.frame.origin.x + offset,
+                                             y: newWindow.frame.origin.y - offset))
         }
+
+        windows.append(PlayerWindow(window: newWindow, viewModel: viewModel))
+        newWindow.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func windowWillClose(_ notification: Notification) {
-        currentViewModel?.stop()
+        guard let closing = notification.object as? NSWindow,
+              let index = windows.firstIndex(where: { $0.window === closing }) else { return }
+        let session = windows.remove(at: index)
+        session.viewModel.stop()
+        // 关闭窗口后释放 SwiftUI 内容树与播放器数据，避免常驻内存。
+        closing.contentView = nil
     }
 }

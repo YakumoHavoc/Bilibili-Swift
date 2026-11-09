@@ -11,6 +11,8 @@ struct PlayerView: View {
     @State private var sliderValue: Double = 0
     @State private var showFullDescription = false
     @State private var downloadNotice: String?
+    /// 视频播放时是否隐藏下方详情，仅保留播放区域。
+    @State private var isDetailHidden = false
 
     private var controlsVisible: Bool {
         isHovering || !viewModel.isPlaying || viewModel.isLoading
@@ -26,8 +28,9 @@ struct PlayerView: View {
             let videoWidth = chatOnRight
                 ? max(320, proxy.size.width - Self.chatPanelWidth)
                 : proxy.size.width
-            // 右侧显示与隐藏都让画面区域铺满窗口，不保留下方弹幕列表占位。
-            let fillsHeight = chatOnRight || chatHidden
+            // 右侧显示、隐藏弹幕或隐藏详情时，画面区域铺满窗口，不留下方占位。
+            let hidesDetail = !viewModel.showsLiveChat && isDetailHidden
+            let fillsHeight = chatOnRight || chatHidden || hidesDetail
             let playerHeight = fillsHeight
                 ? proxy.size.height
                 : min(videoWidth * 9.0 / 16.0, max(280, proxy.size.height * 0.66))
@@ -50,7 +53,7 @@ struct PlayerView: View {
                         if viewModel.liveChatPlacement == .bottom {
                             liveChatPanel
                         }
-                    } else {
+                    } else if !isDetailHidden {
                         detailPanel
                     }
                 }
@@ -251,22 +254,23 @@ struct PlayerView: View {
             }
 
             if viewModel.isLive {
+                let recording = recorder.isRecording(owner: viewModel.recordingOwner)
                 Button {
                     Task { await viewModel.toggleRecording() }
                 } label: {
                     HStack(spacing: 5) {
-                        Image(systemName: recorder.isRecording ? "stop.circle.fill" : "record.circle")
+                        Image(systemName: recording ? "stop.circle.fill" : "record.circle")
                             .font(.system(size: 15, weight: .medium))
-                        if recorder.isRecording {
-                            Text(Fmt.duration(Int(recorder.elapsed)))
+                        if recording {
+                            Text(Fmt.duration(Int(recorder.elapsed(for: viewModel.recordingOwner))))
                                 .font(.system(size: 11, weight: .medium))
                                 .monospacedDigit()
                         }
                     }
-                    .foregroundStyle(recorder.isRecording ? Palette.pink : .white.opacity(0.85))
+                    .foregroundStyle(recording ? Palette.pink : .white.opacity(0.85))
                 }
                 .buttonStyle(.plain)
-                .help(recorder.isRecording ? "停止录制" : "录制直播")
+                .help(recording ? "停止录制" : "录制直播")
 
                 qualityMenu {
                     Text(qualityTitle)
@@ -274,6 +278,18 @@ struct PlayerView: View {
                         .foregroundStyle(.white.opacity(0.9))
                 }
             } else if !viewModel.isRecordingPlayback {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) { isDetailHidden.toggle() }
+                } label: {
+                    Image(systemName: isDetailHidden
+                          ? "rectangle.inset.filled"
+                          : "rectangle.bottomthird.inset.filled")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                .buttonStyle(.plain)
+                .help(isDetailHidden ? "显示详情" : "隐藏详情，仅显示播放区域")
+
                 speedMenu {
                     Image(systemName: "gauge.with.dots.needle.67percent")
                         .font(.system(size: 14))

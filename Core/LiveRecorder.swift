@@ -72,14 +72,17 @@ final class LiveRecorder: ObservableObject {
         return base.appendingPathComponent("哔哩哔哩/直播录制", isDirectory: true)
     }()
 
-    @Published private(set) var isRecording = false
-    @Published private(set) var elapsed: Double = 0
+    /// 当前录制任务数：支持多个直播窗口同时录制。
+    @Published private(set) var recordingCount = 0
+    /// 每秒刷新一次，供界面显示各录制任务的计时。
+    @Published private(set) var tick = Date()
     @Published private(set) var recordings: [LiveRecording] = []
 
-    private var session: Session?
+    private var sessions: [UUID: Session] = [:]
     private var timerTask: Task<Void, Never>?
 
     private struct Session {
+        let owner: UUID
         let roomID: Int
         let title: String
         let qn: Int
@@ -99,8 +102,32 @@ final class LiveRecorder: ObservableObject {
 
     // MARK: - 对外接口
 
-    func start(roomID: Int, title: String, playlistURL: URL, qn: Int) {
-        guard !isRecording else { return }
+    /// 该播放器是否正在录制。
+    func isRecording(owner: UUID) -> Bool {
+        sessions[owner] != nil
+    }
+
+    /// 该播放器的录制时长。
+    func elapsed(for owner: UUID) -> Double {
+        guard let started = sessions[owner]?.startedAt else { return 0 }
+        return max(0, tick.timeIntervalSince(started))
+    }
+
+    /// 正在进行的录制任务，供录制列表展示。
+    struct ActiveRecording: Identifiable {
+        let id: UUID
+        let title: String
+        let startedAt: Date
+    }
+
+    var activeSessions: [ActiveRecording] {
+        sessions.values
+            .map { ActiveRecording(id: $0.owner, title: $0.title, startedAt: $0.startedAt) }
+            .sorted { $0.startedAt < $1.startedAt }
+    }
+
+    func start(owner: UUID, roomID: Int, title: String, playlistURL: URL, qn: Int) {
+        guard sessions[owner] == nil else { return }
         try? FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true)
         loadRecordings()
 
@@ -120,7 +147,8 @@ final class LiveRecorder: ObservableObject {
                        duration: 0,
                        danmakuCount: 0)
 
-        var newSession = Session(roomID: roomID,
+        var newSession = Session(owner: owner,
+                                 roomID: roomID,
                                  title: title,
                                  qn: qn,
                                  startedAt: Date(),
@@ -129,29 +157,19 @@ final class LiveRecorder: ObservableObject {
                                  tsURL: tsURL,
                                  playlistURL: playlistURL)
         newSession.fileHandle = handle
-        session = newSession
-        isRecording = true
-        elapsed = 0
-        session?.task = Task { [weak self] in await self?.pollLoop() }
-
-        timerTask?.cancel()
-        timerTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                guard let self, let started = self.session?.startedAt else { return }
-                self.elapsed = Date().timeIntervalSince(started)
-            }
-        }
+        sessions[owner] = newSession
+        recordingCount = sessions.count
+        tick = Date()
+        sessions[owner]?.task = Task { [weak self] in await self?.pollLoop(owner: owner) }
+        startTimerIfNeeded()
     }
 
     /// 停止录制并返回生成的记录；失败时返回 nil。
     @discardableResult
-    func stop() async -> LiveRecording? {
-        guard var current = session else { return nil }
-        session = nil
-        isRecording = false
-        timerTask?.cancel()
-        timerTask = nil
+    func stop(owner: UUID) async -> LiveRecording? {
+        guard var current = sessions[owner] else { return nil }
+        sessions[owner] = nil
+        recordingCount = sessions.count
         current.task?.cancel()
         await current.task?.value
 
@@ -198,9 +216,22 @@ final class LiveRecorder: ObservableObject {
         return recording
     }
 
-    func recordDanmaku(roomID: Int, nickname: String, text: String, color: Int,
+    private func startTimerIfNeeded() {
+        guard timerTask == nil else { return }
+        timerTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard let self else { return }
+                if self.sessions.isEmpty { break }
+                self.tick = Date()
+            }
+            self?.timerTask = nil
+        }
+    }
+
+    func recordDanmaku(owner: UUID, roomID: Int, nickname: String, text: String, color: Int,
                        mode: Int = 1, fontSize: Double = 25) {
-        guard var current = session, current.roomID == roomID, !text.isEmpty else { return }
+        guard var current = sessions[owner], current.roomID == roomID, !text.isEmpty else { return }
         let t = Date().timeIntervalSince(current.startedAt)
         current.danmaku.append(RecordedDanmaku(t: t,
                                                nickname: nickname,
@@ -208,7 +239,7 @@ final class LiveRecorder: ObservableObject {
                                                color: color,
                                                mode: mode,
                                                fontSize: fontSize))
-        session = current
+        sessions[owner] = current
     }
 
     func loadRecordings() {
@@ -308,29 +339,29 @@ final class LiveRecorder: ObservableObject {
 
     // MARK: - 抓流
 
-    private func pollLoop() async {
+    private func pollLoop(owner: UUID) async {
         while !Task.isCancelled {
-            guard session != nil else { return }
+            guard sessions[owner] != nil else { return }
             do {
-                try await pollOnce()
+                try await pollOnce(owner: owner)
             } catch {
                 // 地址过期或网络抖动：刷新一次播放地址后继续。
-                await refreshPlaylistURL()
+                await refreshPlaylistURL(owner: owner)
             }
             try? await Task.sleep(nanoseconds: 2_000_000_000)
         }
     }
 
-    private func pollOnce() async throws {
-        guard var current = session else { return }
-        let data = try await fetch(current.playlistURL)
+    private func pollOnce(owner: UUID) async throws {
+        guard var current = sessions[owner] else { return }
+        let data = try await fetch(current.playlistURL, roomID: current.roomID)
         guard let text = String(data: data, encoding: .utf8) else { return }
 
         // 主播放列表：跟随第一个子列表。
         if text.contains("#EXT-X-STREAM-INF") {
             if let variant = Self.firstURI(in: text, relativeTo: current.playlistURL) {
                 current.playlistURL = variant
-                session = current
+                sessions[owner] = current
             }
             return
         }
@@ -342,21 +373,21 @@ final class LiveRecorder: ObservableObject {
             segments = [segments[segments.count - 1]]
             current.isFirstPoll = false
         }
-        session = current
+        sessions[owner] = current
 
         for url in segments {
             let key = url.lastPathComponent
-            guard var current = session, !current.seenSegments.contains(key) else { continue }
-            let chunk = try await fetch(url)
-            current.seenSegments.insert(key)
-            session = current
-            try session?.fileHandle?.write(contentsOf: chunk)
+            guard var live = sessions[owner], !live.seenSegments.contains(key) else { continue }
+            let chunk = try await fetch(url, roomID: live.roomID)
+            live.seenSegments.insert(key)
+            sessions[owner] = live
+            try sessions[owner]?.fileHandle?.write(contentsOf: chunk)
         }
     }
 
     /// 播放地址带过期时间，失败时重新请求一次接口并替换为同清晰度的 ts 地址。
-    private func refreshPlaylistURL() async {
-        guard var current = session else { return }
+    private func refreshPlaylistURL(owner: UUID) async {
+        guard var current = sessions[owner] else { return }
         guard let info = try? await BiliAPI.livePlayInfo(roomID: current.roomID, qn: current.qn) else { return }
         let candidates = BiliAPI.liveStreamCandidates(from: info)
         let preferred = candidates.filter { $0.format == "ts" }
@@ -364,11 +395,10 @@ final class LiveRecorder: ObservableObject {
               let url = URL(string: raw) else { return }
         current.playlistURL = url
         current.isFirstPoll = false
-        session = current
+        sessions[owner] = current
     }
 
-    private func fetch(_ url: URL) async throws -> Data {
-        let roomID = session?.roomID ?? 0
+    private func fetch(_ url: URL, roomID: Int) async throws -> Data {
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
         request.setValue("https://live.bilibili.com/\(roomID)", forHTTPHeaderField: "Referer")

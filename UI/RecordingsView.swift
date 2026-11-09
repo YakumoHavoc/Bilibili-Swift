@@ -21,12 +21,12 @@ struct RecordingsView: View {
                 }
                 .padding(.bottom, 4)
 
-                if recorder.isRecording {
-                    liveRow
+                if recorder.recordingCount > 0 {
+                    liveRows
                 }
 
                 if recorder.recordings.isEmpty {
-                    if !recorder.isRecording {
+                    if recorder.recordingCount == 0 {
                         emptyState
                     }
                 } else {
@@ -59,30 +59,33 @@ struct RecordingsView: View {
         return "共 \(recorder.recordings.count) 个录制 · 保存在「下载/哔哩哔哩/直播录制」"
     }
 
-    private var liveRow: some View {
-        HStack(spacing: 14) {
-            Image(systemName: "record.circle")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(Palette.pink)
-                .frame(width: 38, height: 38)
-                .background(Palette.pink.opacity(0.1))
-                .clipShape(Circle())
+    private var liveRows: some View {
+        ForEach(recorder.activeSessions) { session in
+            HStack(spacing: 14) {
+                Image(systemName: "record.circle")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(Palette.pink)
+                    .frame(width: 38, height: 38)
+                    .background(Palette.pink.opacity(0.1))
+                    .clipShape(Circle())
 
-            VStack(alignment: .leading, spacing: 5) {
-                Text("正在录制")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Palette.text1)
-                Text("已录制 \(Fmt.duration(Int(recorder.elapsed)))")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Palette.text3)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(session.title.isEmpty ? "正在录制" : session.title)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Palette.text1)
+                        .lineLimit(1)
+                    Text("正在录制 · 已录制 \(Fmt.duration(Int(recorder.elapsed(for: session.id))))")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.text3)
+                }
+
+                Spacer(minLength: 12)
             }
-
-            Spacer(minLength: 12)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Palette.pink.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.pink.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
     private var emptyState: some View {

@@ -213,6 +213,44 @@ final class BiliClient {
         }
     }
 
+    /// 表单 POST（自动带 Cookie 与 csrf），用于上报观看进度等写操作；返回接口 code。
+    @discardableResult
+    func postForm(_ urlString: String,
+                  params: [String: String] = [:],
+                  referer: String = BiliClient.webReferer) async throws -> Int {
+        guard isLoggedIn else { return -101 }
+        guard let url = URL(string: urlString) else { throw BiliError.invalidURL }
+        var request = makeRequest(url: url, referer: referer, method: "POST")
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        var fields = params
+        if let csrf = cookieValue("bili_jct") {
+            fields["csrf"] = csrf
+        }
+        request.httpBody = Self.formBody(fields).data(using: .utf8)
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw BiliError.network(error.localizedDescription)
+        }
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw BiliError.http(http.statusCode)
+        }
+        persistCookies()
+        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        return (json?["code"] as? Int) ?? -1
+    }
+
+    private static func formBody(_ fields: [String: String]) -> String {
+        fields.map { key, value in
+            let encoded = value.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? value
+            return "\(key)=\(encoded)"
+        }
+        .joined(separator: "&")
+    }
+
     private func buildURL(_ urlString: String, params: [String: String], signed: Bool) async throws -> URL {
         guard var components = URLComponents(string: urlString) else {
             throw BiliError.invalidURL

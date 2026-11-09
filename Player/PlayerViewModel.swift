@@ -14,6 +14,41 @@ struct QualityOption: Identifiable, Hashable {
     let title: String
 }
 
+/// 直播弹幕列表的显示位置。
+enum LiveChatPlacement: String, CaseIterable, Identifiable {
+    case bottom
+    case right
+    case hidden
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .bottom: return "下方显示"
+        case .right: return "右侧显示"
+        case .hidden: return "隐藏"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .bottom: return "rectangle.split.1x2"
+        case .right: return "rectangle.split.2x1"
+        case .hidden: return "eye.slash"
+        }
+    }
+
+    private static let key = "liveChatPlacement"
+
+    static var saved: LiveChatPlacement {
+        UserDefaults.standard.string(forKey: key).flatMap(LiveChatPlacement.init(rawValue:)) ?? .bottom
+    }
+
+    static func save(_ placement: LiveChatPlacement) {
+        UserDefaults.standard.set(placement.rawValue, forKey: key)
+    }
+}
+
 struct DanmakuLaneItem: Identifiable {
     let id: Int
     let item: DanmakuItem
@@ -41,7 +76,11 @@ final class PlayerViewModel: ObservableObject {
     @Published var pubdate = 0
     @Published var isLoading = true
     @Published var errorMessage: String?
-    @Published var isPlaying = false
+    @Published var isPlaying = false {
+        didSet {
+            if isPlaying != oldValue { updateSleepAssertion() }
+        }
+    }
     @Published var isLive = false
     @Published var currentTime: Double = 0 {
         didSet {
@@ -68,6 +107,10 @@ final class PlayerViewModel: ObservableObject {
     @Published var liveRoomID: Int?
     /// 正在播放本地录制的直播回放。
     @Published var isRecordingPlayback = false
+    /// 直播弹幕列表的显示位置，记忆上次选择。
+    @Published var liveChatPlacement: LiveChatPlacement = LiveChatPlacement.saved {
+        didSet { LiveChatPlacement.save(liveChatPlacement) }
+    }
 
     let player = AVPlayer()
     let mode: PlaybackMode
@@ -79,6 +122,8 @@ final class PlayerViewModel: ObservableObject {
     private var referer = "https://www.bilibili.com/"
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
+    /// 播放期间阻止屏幕息屏与系统待机。
+    private var sleepActivity: NSObjectProtocol?
     private var suppressSeekUpdate = false
     private var liveDanmaku: LiveDanmakuClient?
     private var liveDanmakuSeq = 0
@@ -758,6 +803,20 @@ final class PlayerViewModel: ObservableObject {
     }
 
     // MARK: - 控制
+
+    /// 播放时阻止屏幕息屏与系统待机，暂停或停止后恢复。
+    private func updateSleepAssertion() {
+        if isPlaying {
+            guard sleepActivity == nil else { return }
+            sleepActivity = ProcessInfo.processInfo.beginActivity(
+                options: [.userInitiated, .idleDisplaySleepDisabled],
+                reason: "正在播放视频/直播"
+            )
+        } else if let current = sleepActivity {
+            ProcessInfo.processInfo.endActivity(current)
+            sleepActivity = nil
+        }
+    }
 
     func togglePlay() {
         if player.rate == 0 {

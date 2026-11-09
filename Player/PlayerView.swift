@@ -16,17 +16,43 @@ struct PlayerView: View {
         isHovering || !viewModel.isPlaying || viewModel.isLoading
     }
 
+    /// 直播弹幕侧栏宽度（右侧显示时）。
+    private static let chatPanelWidth: CGFloat = 320
+
     var body: some View {
         GeometryReader { proxy in
-            let playerHeight = min(proxy.size.width * 9.0 / 16.0,
-                                   max(280, proxy.size.height * 0.66))
+            let chatOnRight = viewModel.showsLiveChat && viewModel.liveChatPlacement == .right
+            let chatHidden = viewModel.showsLiveChat && viewModel.liveChatPlacement == .hidden
+            let videoWidth = chatOnRight
+                ? max(320, proxy.size.width - Self.chatPanelWidth)
+                : proxy.size.width
+            // 右侧显示与隐藏都让画面区域铺满窗口，不保留下方弹幕列表占位。
+            let fillsHeight = chatOnRight || chatHidden
+            let playerHeight = fillsHeight
+                ? proxy.size.height
+                : min(videoWidth * 9.0 / 16.0, max(280, proxy.size.height * 0.66))
             VStack(spacing: 0) {
-                playerArea
+                if chatOnRight {
+                    HStack(spacing: 0) {
+                        playerArea
+                            .frame(width: videoWidth)
+                        Rectangle()
+                            .fill(Palette.line)
+                            .frame(width: 1)
+                        liveChatPanel
+                            .frame(width: Self.chatPanelWidth)
+                    }
                     .frame(width: proxy.size.width, height: playerHeight)
-                if viewModel.showsLiveChat {
-                    liveChatPanel
                 } else {
-                    detailPanel
+                    playerArea
+                        .frame(width: proxy.size.width, height: playerHeight)
+                    if viewModel.showsLiveChat {
+                        if viewModel.liveChatPlacement == .bottom {
+                            liveChatPanel
+                        }
+                    } else {
+                        detailPanel
+                    }
                 }
             }
         }
@@ -199,6 +225,30 @@ struct PlayerView: View {
             }
             .buttonStyle(.plain)
             .help("弹幕开关")
+
+            if viewModel.showsLiveChat {
+                Menu {
+                    ForEach(LiveChatPlacement.allCases) { placement in
+                        Button {
+                            viewModel.liveChatPlacement = placement
+                        } label: {
+                            if placement == viewModel.liveChatPlacement {
+                                Label(placement.title, systemImage: "checkmark")
+                            } else {
+                                Label(placement.title, systemImage: placement.icon)
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "rectangle.rightthird.inset.filled")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("弹幕列表位置")
+            }
 
             if viewModel.isLive {
                 Button {

@@ -1,6 +1,27 @@
 import SwiftUI
 import AppKit
 
+// MARK: - 主窗口注册
+
+/// 把 MainView 所在的窗口注册给 AppDelegate，用于关闭时隐藏、点击 Dock 重新显示。
+struct MainWindowBinder: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        BinderView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class BinderView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            DispatchQueue.main.async {
+                AppDelegate.shared?.registerMainWindow(window)
+            }
+        }
+    }
+}
+
 // MARK: - 窗口拖动
 
 struct WindowDragArea: NSViewRepresentable {

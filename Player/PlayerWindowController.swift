@@ -7,6 +7,8 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
 
     /// 最多同时存在的播放窗口数（视频、直播共用）。
     static let maxWindows = 3
+    /// 播放窗口标识：主窗口配置时据此跳过播放器窗口。
+    static let windowIdentifier = NSUserInterfaceItemIdentifier("BilibiliPlayerWindow")
 
     private final class PlayerWindow {
         let window: NSWindow
@@ -116,6 +118,7 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
         )
         newWindow.title = displayTitle
         newWindow.titleVisibility = .visible
+        newWindow.identifier = Self.windowIdentifier
         newWindow.minSize = NSSize(width: 900, height: 620)
         newWindow.isReleasedWhenClosed = false
         newWindow.backgroundColor = NSColor.black

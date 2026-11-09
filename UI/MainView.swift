@@ -34,6 +34,7 @@ struct MainView: View {
             }
         }
         .preferredColorScheme(app.themeMode.colorScheme)
+        .background(MainWindowBinder())
         .sheet(isPresented: $app.showLogin) {
             LoginSheet()
                 .environmentObject(app)

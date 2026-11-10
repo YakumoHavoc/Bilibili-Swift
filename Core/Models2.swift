@@ -514,8 +514,12 @@ struct SpaceVideoDTO: Decodable {
 struct ReplyData: Decodable {
     let page: ReplyPage?
     let replies: [Reply]?
-    /// UP 主置顶的评论，用于取 UP 主的 IP 属地。
-    let upper: Reply?
+    /// UP 主置顶评论的包装（`top` 才是评论本身），用于取 UP 主的 IP 属地。
+    let upper: ReplyUpper?
+}
+
+struct ReplyUpper: Decodable {
+    let top: Reply?
 }
 
 struct ReplyPage: Decodable {
@@ -544,7 +548,8 @@ struct ReplyControl: Decodable {
 }
 
 struct ReplyMember: Decodable {
-    let mid: Int?
+    /// 接口返回的是字符串。
+    let mid: String?
     let uname: String?
     let avatar: String?
 }

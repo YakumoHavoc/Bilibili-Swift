@@ -602,6 +602,17 @@ struct PlayerView: View {
                     }
                 }
 
+                if !viewModel.seasonEpisodes.isEmpty {
+                    seasonSection
+                } else if !viewModel.isLive, !viewModel.isRecordingPlayback {
+                    videoActionsRow
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Palette.bgThin)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+
                 if !viewModel.desc.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(viewModel.desc)
@@ -642,6 +653,204 @@ struct PlayerView: View {
             .padding(24)
         }
         .background(Palette.bg)
+    }
+
+    /// 当前视频在合集中的位置（从 1 开始），不在合集内为 0。
+    private var currentSeasonIndex: Int {
+        guard let aid = viewModel.currentSeasonAid,
+              let index = viewModel.seasonEpisodes.firstIndex(where: { $0.aid == aid }) else { return 0 }
+        return index + 1
+    }
+
+    /// 合集：左侧视频信息与互动按钮，右侧合集内视频列表。
+    private var seasonSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text(viewModel.seasonTitle.isEmpty ? "合集" : viewModel.seasonTitle)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Palette.text1)
+                    .lineLimit(1)
+                Text("(\(currentSeasonIndex)/\(viewModel.seasonEpisodes.count))")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.text3)
+                Spacer()
+                if viewModel.seasonViews > 0 {
+                    Label("\(Fmt.count(viewModel.seasonViews)) 播放", systemImage: "play.rectangle")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.text3)
+                }
+            }
+
+            HStack(alignment: .top, spacing: 14) {
+                seasonInfoPane
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Rectangle()
+                    .fill(Palette.line)
+                    .frame(width: 1)
+                    .frame(maxHeight: 250)
+
+                seasonListPane
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(12)
+        .background(Palette.bgThin)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// 左半：封面、标题、UP 主、数据与互动按钮。
+    private var seasonInfoPane: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                RemoteImage(url: viewModel.cover)
+                    .frame(width: 120, height: 72)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(viewModel.title)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Palette.text1)
+                        .lineLimit(2)
+                    Text(viewModel.upName)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.text3)
+                    HStack(spacing: 10) {
+                        statLabel("play.rectangle", Fmt.count(viewModel.views))
+                        statLabel("text.bubble", Fmt.count(viewModel.danmakuCount))
+                        statLabel("hand.thumbsup", Fmt.count(viewModel.likeCount))
+                    }
+                }
+            }
+
+            videoActionsRow
+        }
+    }
+
+    /// 点赞 / 不喜欢 / 投币 / 收藏，合集与非合集视频通用。
+    private var videoActionsRow: some View {
+        HStack(spacing: 8) {
+            actionButton(icon: viewModel.isLiked ? "hand.thumbsup.fill" : "hand.thumbsup",
+                         count: viewModel.likeCount,
+                         active: viewModel.isLiked) {
+                guard requireLogin() else { return }
+                Task { await viewModel.toggleLike() }
+            }
+            actionButton(icon: "hand.thumbsdown",
+                         count: nil,
+                         active: viewModel.isDisliked) {
+                guard requireLogin() else { return }
+                Task { await viewModel.dislike() }
+            }
+            actionButton(icon: "bitcoinsign.circle",
+                         count: viewModel.coinCount,
+                         active: viewModel.coinsGiven > 0) {
+                guard requireLogin() else { return }
+                Task { await viewModel.addCoin() }
+            }
+            actionButton(icon: viewModel.isFavorited ? "star.fill" : "star",
+                         count: viewModel.favoriteCount,
+                         active: viewModel.isFavorited) {
+                guard requireLogin() else { return }
+                Task { await viewModel.toggleFavorite(userMid: app.user?.mid) }
+            }
+            ShareLink(item: viewModel.shareText) {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrowshape.turn.up.right")
+                        .font(.system(size: 12, weight: .medium))
+                    Text("转发")
+                        .font(.system(size: 11))
+                }
+                .foregroundStyle(Palette.text2)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Palette.bg)
+                .clipShape(Capsule())
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("转发给朋友")
+        }
+    }
+
+    /// 右半：合集内视频列表。
+    private var seasonListPane: some View {
+        ScrollView {
+            VStack(spacing: 2) {
+                ForEach(Array(viewModel.seasonEpisodes.enumerated()), id: \.offset) { index, episode in
+                    seasonRow(episode, index: index)
+                }
+            }
+        }
+        .frame(maxHeight: 250)
+    }
+
+    private func statLabel(_ icon: String, _ text: String) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 9))
+            Text(text)
+                .font(.system(size: 10))
+        }
+        .foregroundStyle(Palette.text3)
+    }
+
+    private func actionButton(icon: String, count: Int?, active: Bool,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .medium))
+                if let count {
+                    Text(Fmt.count(count))
+                        .font(.system(size: 11))
+                }
+            }
+            .foregroundStyle(active ? Palette.pink : Palette.text2)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(active ? Palette.pink.opacity(0.12) : Palette.bg)
+            .clipShape(Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func requireLogin() -> Bool {
+        guard BiliClient.shared.isLoggedIn else {
+            app.showLogin = true
+            return false
+        }
+        return true
+    }
+
+    private func seasonRow(_ episode: UgcEpisode, index: Int) -> some View {
+        let isCurrent = episode.aid == viewModel.currentSeasonAid
+        return Button {
+            Task { await viewModel.playSeasonEpisode(episode) }
+        } label: {
+            HStack(spacing: 8) {
+                if isCurrent {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.pink)
+                }
+                Text(episode.title ?? episode.arc?.title ?? "第 \(index + 1) 集")
+                    .font(.system(size: 12, weight: isCurrent ? .medium : .regular))
+                    .foregroundStyle(isCurrent ? Palette.pink : Palette.text2)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Text(Fmt.duration(episode.arc?.duration ?? episode.page?.duration ?? 0))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.text3)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(isCurrent ? Palette.pink.opacity(0.1) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder

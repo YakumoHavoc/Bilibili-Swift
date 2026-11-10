@@ -94,6 +94,22 @@ final class PlayerViewModel: ObservableObject {
     @Published var audioQualityTitle = ""
     /// UP 主的 IP 属地：优先取本人评论，其次空间页的所在地。
     @Published var upLocation = ""
+    /// 视频所属合集的标题、播放量与视频列表。
+    @Published var seasonTitle = ""
+    @Published var seasonViews = 0
+    @Published var seasonEpisodes: [UgcEpisode] = []
+    /// 当前播放视频在合集内的 aid，用于高亮。
+    @Published var currentSeasonAid: Int?
+    /// 互动数据与当前账号的互动状态。
+    @Published var likeCount = 0
+    @Published var coinCount = 0
+    @Published var favoriteCount = 0
+    @Published var isLiked = false
+    @Published var isDisliked = false
+    @Published var isFavorited = false
+    @Published var coinsGiven = 0
+    /// 收藏时使用的收藏夹 id，首次操作时获取。
+    private var favoriteFolderID: Int?
     @Published var playbackRate: Double = 1
     @Published var danmakuItems: [DanmakuLaneItem] = []
     @Published var liveMessages: [LiveDanmakuMessage] = []
@@ -262,13 +278,35 @@ final class PlayerViewModel: ObservableObject {
         upMid = detail.owner?.mid
         views = detail.stat?.view ?? 0
         danmakuCount = detail.stat?.danmaku ?? 0
+        likeCount = detail.stat?.like ?? 0
+        coinCount = detail.stat?.coin ?? 0
+        favoriteCount = detail.stat?.favorite ?? 0
+        isLiked = false
+        isDisliked = false
+        isFavorited = false
+        coinsGiven = 0
+        favoriteFolderID = nil
         pubdate = detail.pubdate ?? 0
         pages = detail.pages ?? []
         currentPageIndex = 0
         referer = "https://www.bilibili.com/video/\(detail.bvid ?? identifier)/"
 
+        // 合集信息：用于在播放页列出同合集的其他视频。
+        if let season = detail.ugc_season {
+            seasonTitle = season.title ?? ""
+            seasonViews = season.stat?.view ?? 0
+            seasonEpisodes = season.sections?.flatMap { $0.episodes ?? [] } ?? []
+            currentSeasonAid = detail.aid
+        } else {
+            seasonTitle = ""
+            seasonViews = 0
+            seasonEpisodes = []
+            currentSeasonAid = nil
+        }
+
         // 弹幕与评论不阻塞播放，后台并行加载。
         startAuxiliaryLoading(cid: cid)
+        Task { @MainActor [weak self] in await self?.loadRelation() }
 
         try await refreshPlayURL()
     }
@@ -934,6 +972,71 @@ final class PlayerViewModel: ObservableObject {
         }
     }
 
+    /// 切换到同合集中的其他视频。
+    func playSeasonEpisode(_ episode: UgcEpisode) async {
+        guard let target = episode.bvid, target != bvid else { return }
+        currentTime = 0
+        danmakuItems = []
+        isLoading = true
+        do {
+            try await loadVideo(identifier: target)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    // MARK: - 互动（点赞 / 不喜欢 / 投币 / 收藏）
+
+    /// 转发给朋友的文本：视频标题 + 地址。
+    var shareText: String {
+        let link = bvid.map { "https://www.bilibili.com/video/\($0)" } ?? ""
+        return link.isEmpty ? title : "【\(title)】 \(link)"
+    }
+
+    private func loadRelation() async {
+        guard let bvid, BiliClient.shared.isLoggedIn else { return }
+        guard let relation = try? await BiliAPI.videoRelation(bvid: bvid), self.bvid == bvid else { return }
+        isLiked = relation.like ?? false
+        isDisliked = relation.dislike ?? false
+        isFavorited = relation.favorite ?? false
+        coinsGiven = relation.coin ?? 0
+    }
+
+    func toggleLike() async {
+        guard let aid else { return }
+        let target = !isLiked
+        guard let code = try? await BiliAPI.likeVideo(aid: aid, like: target), code == 0 else { return }
+        isLiked = target
+        likeCount = max(0, likeCount + (target ? 1 : -1))
+    }
+
+    func dislike() async {
+        guard let aid, !isDisliked else { return }
+        guard let code = try? await BiliAPI.dislikeVideo(aid: aid), code == 0 else { return }
+        isDisliked = true
+    }
+
+    func addCoin() async {
+        guard let aid, coinsGiven < 2 else { return }
+        guard let code = try? await BiliAPI.addCoin(aid: aid), code == 0 else { return }
+        coinsGiven += 1
+        coinCount += 1
+    }
+
+    func toggleFavorite(userMid: Int?) async {
+        guard let aid, let userMid else { return }
+        if favoriteFolderID == nil {
+            favoriteFolderID = (try? await BiliAPI.favoriteFolders(mid: userMid))?.list?.first?.id
+        }
+        guard let folderID = favoriteFolderID else { return }
+        let add = !isFavorited
+        guard let code = try? await BiliAPI.favoriteVideo(aid: aid, folderID: folderID, add: add),
+              code == 0 else { return }
+        isFavorited = add
+        favoriteCount = max(0, favoriteCount + (add ? 1 : -1))
+    }
+
     // MARK: - 弹幕与评论
 
     private func loadDanmaku(cid: Int) async {
@@ -1062,14 +1165,14 @@ final class PlayerViewModel: ObservableObject {
         guard let data = try? await BiliAPI.replies(aid: aid) else { return }
         comments = data.replies ?? []
         repliesCount = data.page?.count ?? 0
-        await resolveUpLocation(comments: data.replies ?? [], pinned: data.upper)
+        await resolveUpLocation(comments: data.replies ?? [], pinned: data.upper?.top)
     }
 
     /// UP 主的 IP 属地：优先取本人（含置顶）评论的属地，没有再退回空间页的所在地。
     private func resolveUpLocation(comments: [Reply], pinned: Reply?) async {
         guard let upMid else { return }
         let candidates = [pinned].compactMap { $0 } + comments
-        if let location = candidates.first(where: { $0.member?.mid == upMid })?.location {
+        if let location = candidates.first(where: { $0.member?.mid == String(upMid) })?.location {
             upLocation = location
             return
         }

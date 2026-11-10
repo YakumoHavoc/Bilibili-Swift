@@ -343,6 +343,50 @@ enum BiliAPI {
         )
     }
 
+    // MARK: - 视频互动（点赞 / 不喜欢 / 投币 / 收藏）
+
+    static func videoRelation(bvid: String) async throws -> VideoRelationData {
+        try await BiliClient.shared.get(
+            "https://api.bilibili.com/x/web-interface/archive/relation",
+            params: ["bvid": bvid],
+            referer: "https://www.bilibili.com/video/\(bvid)/"
+        )
+    }
+
+    static func likeVideo(aid: Int, like: Bool) async throws -> Int {
+        try await BiliClient.shared.postForm(
+            "https://api.bilibili.com/x/web-interface/archive/like",
+            params: ["aid": String(aid), "like": like ? "1" : "2"],
+            referer: "https://www.bilibili.com/"
+        )
+    }
+
+    static func dislikeVideo(aid: Int) async throws -> Int {
+        try await BiliClient.shared.postForm(
+            "https://api.bilibili.com/x/web-interface/archive/dislike",
+            params: ["aid": String(aid)],
+            referer: "https://www.bilibili.com/"
+        )
+    }
+
+    static func addCoin(aid: Int) async throws -> Int {
+        try await BiliClient.shared.postForm(
+            "https://api.bilibili.com/x/web-interface/coin/add",
+            params: ["aid": String(aid), "multiply": "1", "select_like": "0"],
+            referer: "https://www.bilibili.com/"
+        )
+    }
+
+    static func favoriteVideo(aid: Int, folderID: Int, add: Bool) async throws -> Int {
+        var params = ["rid": String(aid), "type": "2"]
+        params[add ? "add_media_ids" : "del_media_ids"] = String(folderID)
+        return try await BiliClient.shared.postForm(
+            "https://api.bilibili.com/x/v3/fav/resource/deal",
+            params: params,
+            referer: "https://www.bilibili.com/"
+        )
+    }
+
     static func favoriteFolders(mid: Int) async throws -> FavoriteFolderData {
         try await BiliClient.shared.get(
             "https://api.bilibili.com/x/v3/fav/folder/created/list-all",

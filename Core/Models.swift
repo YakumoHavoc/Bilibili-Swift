@@ -24,6 +24,15 @@ struct Stat: Decodable {
     let share: Int?
 }
 
+/// 当前账号对某视频的互动状态。
+struct VideoRelationData: Decodable {
+    let like: Bool?
+    let dislike: Bool?
+    /// 已投币数量。
+    let coin: Int?
+    let favorite: Bool?
+}
+
 struct VideoPage: Decodable, Identifiable, Hashable {
     let cid: Int?
     let page: Int?
@@ -183,6 +192,46 @@ struct VideoDetailData: Decodable {
     let owner: Owner?
     let stat: Stat?
     let pages: [VideoPage]?
+    /// 视频所属的合集（UP 主自行组织），没有合集时为空。
+    let ugc_season: UgcSeason?
+}
+
+// MARK: - 合集（ugc_season）
+
+struct UgcSeason: Decodable {
+    let id: Int?
+    let title: String?
+    let cover: String?
+    let intro: String?
+    let ep_count: Int?
+    let stat: UgcSeasonStat?
+    let sections: [UgcSection]?
+}
+
+struct UgcSeasonStat: Decodable {
+    let view: Int?
+}
+
+struct UgcSection: Decodable {
+    let id: Int?
+    let title: String?
+    let episodes: [UgcEpisode]?
+}
+
+struct UgcEpisode: Decodable, Identifiable {
+    let id: Int?
+    let aid: Int?
+    let bvid: String?
+    let cid: Int?
+    let title: String?
+    let arc: UgcEpisodeArc?
+    let page: VideoPage?
+}
+
+struct UgcEpisodeArc: Decodable {
+    let title: String?
+    let pic: String?
+    let duration: Int?
 }
 
 // MARK: - 播放地址

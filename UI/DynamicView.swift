@@ -38,6 +38,8 @@ struct DynamicView: View {
     @State private var updatedMids: Set<Int> = []
     /// 有新动态的 UP 主（取自动态流本身，不依赖关注列表首页）。
     @State private var updateAuthors: [FollowingUser] = []
+    /// 当前在动态页内查看的 UP 主，nil 表示全部动态。
+    @State private var selectedAuthor: FollowingUser?
     @State private var commentTarget: DynamicItem?
     @State private var imageViewer: ImageViewerPayload?
     @State private var forwardTarget: DynamicDetailTarget?
@@ -62,7 +64,6 @@ struct DynamicView: View {
             }
         }
         .background(Palette.bg)
-        .onDisappear { markSeen() }
         .sheet(item: $commentTarget) { item in
             DynamicCommentsSheet(dynamic: item)
         }
@@ -174,7 +175,11 @@ struct DynamicView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 avatarRow
-                tabs
+                if let author = selectedAuthor {
+                    authorHeader(author)
+                } else {
+                    tabs
+                }
 
                 Rectangle()
                     .fill(Palette.line)
@@ -197,6 +202,8 @@ struct DynamicView: View {
                             imageViewer = ImageViewerPayload(images: urls, index: index)
                         } onOpenForward: { item in
                             forwardTarget = DynamicDetailTarget(item: item)
+                        } onOpenLive: { room in
+                            PlayerWindowController.shared.openLive(room: room, app: app)
                         }
 
                         Rectangle()
@@ -231,12 +238,12 @@ struct DynamicView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 14) {
                 Button {
-                    markSeen()
-                    updatedMids = []
-                    updateAuthors = []
-                    applyFollowingsOrder()
+                    let wasAuthor = selectedAuthor != nil
+                    selectedAuthor = nil
                     if filter != .all {
                         filter = .all
+                        Task { await reload() }
+                    } else if wasAuthor {
                         Task { await reload() }
                     }
                 } label: {
@@ -263,11 +270,7 @@ struct DynamicView: View {
 
                 ForEach(followings) { user in
                     Button {
-                        markSeen(mid: user.id)
-                        updatedMids.remove(user.id)
-                        updateAuthors.removeAll { $0.id == user.id }
-                        applyFollowingsOrder()
-                        app.navigate(.space(user.id))
+                        selectAuthor(user)
                     } label: {
                         VStack(spacing: 6) {
                             AvatarView(url: ImageURL.thumb(user.face, width: 96, height: 96), size: 44)
@@ -298,6 +301,34 @@ struct DynamicView: View {
             .padding(.vertical, 14)
             .padding(.horizontal, 2)
         }
+    }
+
+    private func authorHeader(_ author: FollowingUser) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                selectedAuthor = nil
+                Task { await reload() }
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "chevron.left")
+                    Text("全部动态")
+                }
+                .font(.system(size: 13))
+                .foregroundStyle(Palette.text3)
+            }
+            .buttonStyle(.plain)
+            .help("返回全部动态")
+
+            AvatarView(url: ImageURL.thumb(author.face, width: 64, height: 64), size: 22)
+
+            Text(author.name)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Palette.text1)
+                .lineLimit(1)
+
+            Spacer()
+        }
+        .padding(.bottom, 10)
     }
 
     private var tabs: some View {
@@ -341,6 +372,10 @@ struct DynamicView: View {
     }
 
     private func reload() async {
+        if let author = selectedAuthor {
+            await loadAuthor(author)
+            return
+        }
         isLoading = true
         errorMessage = nil
         offset = nil
@@ -350,7 +385,8 @@ struct DynamicView: View {
             items = data.items ?? []
             offset = data.offset
             hasMore = data.has_more ?? false
-            detectUpdates()
+            // 未读标记基于「全部动态」计算，切换分类时保留原标记。
+            if filter == .all { detectUpdates() }
         } catch {
             items = []
             errorMessage = error.localizedDescription
@@ -358,8 +394,8 @@ struct DynamicView: View {
         isLoading = false
     }
 
-    /// 对比上次离开动态页时记录的各 UP 主最新动态时间，找出有新动态的 UP 主。
-    /// 这里只读取基线，真正推进基线在 `markSeen()`（离开页面或点开该 UP 时）。
+    /// 对比上次点开该 UP 时记录的最新动态时间，找出有新动态的 UP 主。
+    /// 这里只读取基线，真正推进基线在点开该 UP 头像查看其动态时。
     private func detectUpdates() {
         let stored = seenMap()
         var latest: [String: Int] = [:]
@@ -370,15 +406,13 @@ struct DynamicView: View {
             latest[String(mid)] = max(latest[String(mid)] ?? 0, ts)
         }
 
-        // 首次使用（或旧版本升级）没有基线时，把最近 24 小时的动态视为“有更新”，
-        // 否则新用户永远看不到任何标记。
-        let firstRunCutoff = Int(Date().timeIntervalSince1970) - 24 * 3600
+        // 没有基线（从未点开过该 UP）时也视为有更新，直到点开其头像查看动态。
         var updated: Set<Int> = []
         for (midKey, ts) in latest {
             guard let mid = Int(midKey) else { continue }
             if let seen = stored[midKey] {
                 if ts > seen { updated.insert(mid) }
-            } else if ts > firstRunCutoff {
+            } else {
                 updated.insert(mid)
             }
         }
@@ -423,14 +457,57 @@ struct DynamicView: View {
         followings = updateAuthors + allFollowings.filter { !updatedIds.contains($0.id) }
     }
 
+    /// 在当前动态页内切换到某个 UP 主的动态，并清除其未读标记。
+    private func selectAuthor(_ user: FollowingUser) {
+        guard selectedAuthor?.id != user.id else { return }
+        markSeen(mid: user.id)
+        updatedMids.remove(user.id)
+        applyFollowingsOrder()
+        selectedAuthor = user
+        Task { await loadAuthor(user) }
+    }
+
+    private func loadAuthor(_ user: FollowingUser) async {
+        isLoading = true
+        errorMessage = nil
+        offset = nil
+        hasMore = true
+        items = []
+        do {
+            let data = try await BiliAPI.spaceDynamics(mid: user.id)
+            guard selectedAuthor?.id == user.id else { return }
+            items = data.items ?? []
+            offset = data.offset
+            hasMore = data.has_more ?? false
+            // 已进入该 UP 的动态列表，把基线推进到最新一条。
+            markSeen(mid: user.id)
+        } catch {
+            guard selectedAuthor?.id == user.id else { return }
+            items = []
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
     private func loadMore() async {
         guard !isLoading, !isLoadingMore, hasMore, let offset else { return }
         isLoadingMore = true
         do {
-            let data = try await BiliAPI.dynamicFeed(type: filter.rawValue, offset: offset)
-            items += data.items ?? []
-            self.offset = data.offset
-            hasMore = data.has_more ?? false
+            if let author = selectedAuthor {
+                let data = try await BiliAPI.spaceDynamics(mid: author.id, offset: offset)
+                guard selectedAuthor?.id == author.id else {
+                    isLoadingMore = false
+                    return
+                }
+                items += data.items ?? []
+                self.offset = data.offset
+                hasMore = data.has_more ?? false
+            } else {
+                let data = try await BiliAPI.dynamicFeed(type: filter.rawValue, offset: offset)
+                items += data.items ?? []
+                self.offset = data.offset
+                hasMore = data.has_more ?? false
+            }
         } catch {
             hasMore = false
         }
@@ -455,6 +532,8 @@ struct DynamicCardView: View {
     let onOpenImages: ([String], Int) -> Void
     /// 打开转发原动态的详情。
     let onOpenForward: (DynamicItem) -> Void
+    /// 打开直播推荐动态对应的直播间。
+    let onOpenLive: (LiveRoom) -> Void
 
     @State private var expanded = false
 
@@ -490,6 +569,9 @@ struct DynamicCardView: View {
                 }
                 if let pgc = content?.major?.pgc {
                     pgcCard(pgc)
+                }
+                if let live = content?.major?.live_rcmd?.playInfo {
+                    liveCard(live)
                 }
 
                 if let orig = item.orig {
@@ -648,6 +730,57 @@ struct DynamicCardView: View {
         }
         .buttonStyle(.plain)
         .frame(maxWidth: 560, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func liveCard(_ info: LiveRcmdPlayInfo) -> some View {
+        let isLiving = (info.live_status ?? 0) == 1
+        let area = [info.parent_area_name, info.area_name]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+
+        Button {
+            guard let roomID = info.room_id, roomID > 0 else { return }
+            onOpenLive(info.asLiveRoom)
+        } label: {
+            HStack(spacing: 10) {
+                ZStack(alignment: .bottomLeading) {
+                    RemoteImage(url: ImageURL.thumb(info.cover, width: 320, height: 200))
+                        .frame(width: 132, height: 82)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    Text(isLiving ? "直播中" : "未开播")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(isLiving ? Palette.pink : Palette.text3)
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                        .offset(x: 4, y: -4)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(info.title ?? "")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Palette.text1)
+                        .lineLimit(2)
+                    if !area.isEmpty {
+                        Text(area)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Palette.text3)
+                    }
+                    Text("\(Fmt.count(info.online ?? 0)) 人气")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Palette.text3)
+                }
+                Spacer()
+            }
+            .padding(8)
+            .background(Palette.bgThin)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: 560, alignment: .leading)
+        .help("进入直播间")
     }
 
     @ViewBuilder

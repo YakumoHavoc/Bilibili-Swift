@@ -300,6 +300,42 @@ struct DynamicMajor: Decodable {
     let article: DynamicArticle?
     let pgc: DynamicPGC?
     let opus: DynamicOpus?
+    let live_rcmd: DynamicLiveRcmd?
+}
+
+/// 直播推荐动态：`content` 是一段 JSON 字符串，需要二次解析。
+struct DynamicLiveRcmd: Decodable {
+    let content: String?
+    let reserve_type: Int?
+
+    var playInfo: LiveRcmdPlayInfo? {
+        guard let content, let data = content.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(LiveRcmdContent.self, from: data).live_play_info
+    }
+}
+
+struct LiveRcmdContent: Decodable {
+    let live_play_info: LiveRcmdPlayInfo?
+}
+
+struct LiveRcmdPlayInfo: Decodable {
+    let room_id: Int?
+    let uid: Int?
+    let live_status: Int?
+    let title: String?
+    let cover: String?
+    let online: Int?
+    let area_name: String?
+    let parent_area_name: String?
+    let uname: String?
+    let face: String?
+
+    var asLiveRoom: LiveRoom {
+        LiveRoom(dto: LiveRoomDTO(roomid: room_id, uid: uid, title: title, uname: uname,
+                                  online: online, cover: cover, user_cover: nil,
+                                  system_cover: nil, keyframe: nil, face: face,
+                                  area_name: area_name, parent_name: parent_area_name))
+    }
 }
 
 /// 新版图文动态（OPUS），正文与图片都在这里。

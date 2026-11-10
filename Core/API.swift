@@ -391,6 +391,22 @@ enum BiliAPI {
         )
     }
 
+    /// 指定 UP 主的动态流（用于在动态页内直接查看某个 UP 主的动态）。
+    static func spaceDynamics(mid: Int, offset: String? = nil) async throws -> DynamicFeedData {
+        var params = [
+            "host_mid": String(mid),
+            "timezone_offset": "-480",
+            "platform": "web",
+            "features": "itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard"
+        ]
+        if let offset { params["offset"] = offset }
+        return try await BiliClient.shared.get(
+            "https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space",
+            params: params,
+            referer: "https://space.bilibili.com/\(mid)/dynamic"
+        )
+    }
+
     static func followings(mid: Int, page: Int = 1, pageSize: Int = 30) async throws -> FollowingsData {
         try await BiliClient.shared.get(
             "https://api.bilibili.com/x/relation/followings",

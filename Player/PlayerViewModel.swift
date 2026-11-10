@@ -126,6 +126,8 @@ final class PlayerViewModel: ObservableObject {
     private var endObserver: NSObjectProtocol?
     /// 播放期间阻止屏幕息屏与系统待机。
     private var sleepActivity: NSObjectProtocol?
+    private var timeControlObservation: NSKeyValueObservation?
+    private var failedObserver: NSObjectProtocol?
     private var suppressSeekUpdate = false
     private var liveDanmaku: LiveDanmakuClient?
     private var liveDanmakuSeq = 0
@@ -177,6 +179,23 @@ final class PlayerViewModel: ObservableObject {
                 self?.isPlaying = false
             }
         }
+
+        failedObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.isPlaying = false
+            }
+        }
+
+        // 播放器真正停止（暂停、播放结束、直播断流且不再播放）时立即释放待机阻止。
+        timeControlObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor [weak self] in
+                self?.updateSleepAssertion()
+            }
+        }
     }
 
     deinit {
@@ -185,6 +204,9 @@ final class PlayerViewModel: ObservableObject {
         }
         if let endObserver {
             NotificationCenter.default.removeObserver(endObserver)
+        }
+        if let failedObserver {
+            NotificationCenter.default.removeObserver(failedObserver)
         }
     }
 
@@ -815,9 +837,11 @@ final class PlayerViewModel: ObservableObject {
 
     // MARK: - 控制
 
-    /// 播放时阻止屏幕息屏与系统待机，暂停或停止后恢复。
+    /// 仅在播放器真正处于播放状态时阻止屏幕息屏与系统待机。
+    /// 暂停、播放结束、直播断流或加载失败后立即恢复，避免窗口还开着却无法待机。
     private func updateSleepAssertion() {
-        if isPlaying {
+        let shouldPreventSleep = isPlaying && player.timeControlStatus == .playing
+        if shouldPreventSleep {
             guard sleepActivity == nil else { return }
             sleepActivity = ProcessInfo.processInfo.beginActivity(
                 options: [.userInitiated, .idleDisplaySleepDisabled],

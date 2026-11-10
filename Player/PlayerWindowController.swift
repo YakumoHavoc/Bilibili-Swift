@@ -22,6 +22,8 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
 
     private var windows: [PlayerWindow] = []
     private var keyMonitor: Any?
+    /// 最近获得焦点的播放器窗口，用于 key window 被主窗口抢走时仍能响应空格/媒体键。
+    private weak var activeWindow: NSWindow?
 
     override init() {
         super.init()
@@ -31,8 +33,10 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
             let type = event.type.rawValue
             let keyCode = event.keyCode
             let modifiers = event.modifierFlags.rawValue
-            let subtype = event.subtype.rawValue
-            let data1 = event.data1
+            // subtype / data1 只在系统定义事件上有效，键盘事件读取可能抛异常。
+            let isSystemDefined = event.type == .systemDefined
+            let subtype = isSystemDefined ? event.subtype.rawValue : 0
+            let data1 = isSystemDefined ? event.data1 : 0
             let consumed = MainActor.assumeIsolated {
                 self?.handleShortcut(type: type,
                                      keyCode: keyCode,
@@ -47,8 +51,19 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
     /// 返回 true 表示该按键已被播放器消费。
     private func handleShortcut(type: UInt, keyCode: UInt16, modifiers: UInt,
                                 subtype: Int16, data1: Int) -> Bool {
-        guard let target = windows.first(where: { $0.window.isKeyWindow }),
-              target.window.attachedSheet == nil else { return false }
+        let keyWindow = NSApp.keyWindow
+        // 优先当前 key 的播放窗口；若焦点被主窗口拿走，退回到最近活动的播放窗口，
+        // 这样在播放窗口按空格、用媒体键仍能控制当前播放内容。
+        var target = windows.first(where: { $0.window.isKeyWindow })
+        if target == nil,
+           let activeWindow,
+           let match = windows.first(where: { $0.window === activeWindow }),
+           activeWindow.isVisible {
+            // 主窗口中的输入框获得焦点时不拦截空格。
+            if let keyWindow, keyWindow.firstResponder is NSText { return false }
+            target = match
+        }
+        guard let target, target.window.attachedSheet == nil else { return false }
         // 避免拦截输入框/菜单中的按键。
         if target.window.firstResponder is NSText { return false }
         let viewModel = target.viewModel
@@ -133,8 +148,15 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
         }
 
         windows.append(PlayerWindow(window: newWindow, viewModel: viewModel))
+        activeWindow = newWindow
         newWindow.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              windows.contains(where: { $0.window === window }) else { return }
+        activeWindow = window
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -142,6 +164,9 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
               let index = windows.firstIndex(where: { $0.window === closing }) else { return }
         let session = windows.remove(at: index)
         session.viewModel.stop()
+        if activeWindow === closing {
+            activeWindow = windows.last?.window
+        }
         // 关闭窗口后释放 SwiftUI 内容树与播放器数据，避免常驻内存。
         closing.contentView = nil
     }

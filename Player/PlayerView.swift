@@ -13,6 +13,13 @@ struct PlayerView: View {
     @State private var downloadNotice: String?
     /// 视频播放时是否隐藏下方详情，仅保留播放区域。
     @State private var isDetailHidden = false
+    /// 详情区当前滚动距离，用于收起播放区域。
+    @State private var detailScrollOffset: CGFloat = 0
+    /// 点「返回顶部」时自增，触发详情区回到顶部。
+    @State private var scrollToTopToken = 0
+
+    /// 滚过这段距离后播放区域完全收起。
+    private static let collapseDistance: CGFloat = 360
 
     private var controlsVisible: Bool {
         isHovering || !viewModel.isPlaying || viewModel.isLoading
@@ -31,9 +38,14 @@ struct PlayerView: View {
             // 右侧显示、隐藏弹幕或隐藏详情时，画面区域铺满窗口，不留下方占位。
             let hidesDetail = !viewModel.showsLiveChat && isDetailHidden
             let fillsHeight = chatOnRight || chatHidden || hidesDetail
-            let playerHeight = fillsHeight
+            let baseHeight = fillsHeight
                 ? proxy.size.height
                 : min(videoWidth * 9.0 / 16.0, max(280, proxy.size.height * 0.66))
+            // 向下滚动查看评论时，播放区域按滚动距离逐渐收起直至完全隐藏。
+            let collapse = fillsHeight || viewModel.showsLiveChat
+                ? 0
+                : min(1, max(0, detailScrollOffset / Self.collapseDistance))
+            let playerHeight = baseHeight * (1 - collapse)
             VStack(spacing: 0) {
                 if chatOnRight {
                     HStack(spacing: 0) {
@@ -49,6 +61,7 @@ struct PlayerView: View {
                 } else {
                     playerArea
                         .frame(width: proxy.size.width, height: playerHeight)
+                        .clipped()
                     if viewModel.showsLiveChat {
                         if viewModel.liveChatPlacement == .bottom {
                             liveChatPanel
@@ -58,10 +71,32 @@ struct PlayerView: View {
                     }
                 }
             }
+            .overlay(alignment: .bottomTrailing) {
+                if collapse >= 1 {
+                    Button {
+                        scrollToTopToken += 1
+                    } label: {
+                        Label("返回顶部", systemImage: "arrow.up")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Palette.pink)
+                            .clipShape(Capsule())
+                            .shadow(color: .black.opacity(0.25), radius: 8, y: 2)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(20)
+                }
+            }
         }
         .background(Palette.bg)
         .preferredColorScheme(app.themeMode.colorScheme)
         .task { await viewModel.load() }
+        .onChange(of: viewModel.title) { _, _ in
+            // 切换视频/合集内其他视频后回到顶部，恢复播放区域。
+            scrollToTopToken += 1
+        }
         .onDisappear { viewModel.stop() }
     }
 
@@ -527,6 +562,7 @@ struct PlayerView: View {
     // MARK: - 详情
 
     private var detailPanel: some View {
+        ScrollViewReader { scrollProxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text(viewModel.title)
@@ -651,6 +687,14 @@ struct PlayerView: View {
                 }
             }
             .padding(24)
+            .id("detailTop")
+            .background(ScrollOffsetObserver { detailScrollOffset = $0 })
+        }
+        .onChange(of: scrollToTopToken) { _, _ in
+            withAnimation(.easeInOut(duration: 0.28)) {
+                scrollProxy.scrollTo("detailTop", anchor: .top)
+            }
+        }
         }
         .background(Palette.bg)
     }
@@ -727,8 +771,10 @@ struct PlayerView: View {
     }
 
     /// 点赞 / 不喜欢 / 投币 / 收藏，合集与非合集视频通用。
+    /// 窗口较窄时退回只显示图标的紧凑样式，避免文字被压成竖排。
     private var videoActionsRow: some View {
-        HStack(spacing: 8) {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
             actionButton(icon: viewModel.isLiked ? "hand.thumbsup.fill" : "hand.thumbsup",
                          count: viewModel.likeCount,
                          active: viewModel.isLiked) {
@@ -759,6 +805,8 @@ struct PlayerView: View {
                         .font(.system(size: 12, weight: .medium))
                     Text("转发")
                         .font(.system(size: 11))
+                        .lineLimit(1)
+                        .fixedSize()
                 }
                 .foregroundStyle(Palette.text2)
                 .padding(.horizontal, 10)
@@ -769,7 +817,53 @@ struct PlayerView: View {
             }
             .buttonStyle(.plain)
             .help("转发给朋友")
+            }
+            .fixedSize(horizontal: true, vertical: false)
+
+            HStack(spacing: 8) {
+                compactActionButton(icon: viewModel.isLiked ? "hand.thumbsup.fill" : "hand.thumbsup",
+                                    active: viewModel.isLiked) {
+                    guard requireLogin() else { return }
+                    Task { await viewModel.toggleLike() }
+                }
+                compactActionButton(icon: "hand.thumbsdown", active: viewModel.isDisliked) {
+                    guard requireLogin() else { return }
+                    Task { await viewModel.dislike() }
+                }
+                compactActionButton(icon: "bitcoinsign.circle", active: viewModel.coinsGiven > 0) {
+                    guard requireLogin() else { return }
+                    Task { await viewModel.addCoin() }
+                }
+                compactActionButton(icon: viewModel.isFavorited ? "star.fill" : "star",
+                                    active: viewModel.isFavorited) {
+                    guard requireLogin() else { return }
+                    Task { await viewModel.toggleFavorite(userMid: app.user?.mid) }
+                }
+                ShareLink(item: viewModel.shareText) {
+                    compactIcon("arrowshape.turn.up.right", active: false)
+                }
+                .buttonStyle(.plain)
+                .help("转发给朋友")
+            }
         }
+    }
+
+    private func compactActionButton(icon: String, active: Bool,
+                                     action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            compactIcon(icon, active: active)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func compactIcon(_ icon: String, active: Bool) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(active ? Palette.pink : Palette.text2)
+            .frame(width: 32, height: 26)
+            .background(active ? Palette.pink.opacity(0.12) : Palette.bg)
+            .clipShape(Capsule())
+            .contentShape(Capsule())
     }
 
     /// 右半：合集内视频列表。
@@ -803,6 +897,8 @@ struct PlayerView: View {
                 if let count {
                     Text(Fmt.count(count))
                         .font(.system(size: 11))
+                        .lineLimit(1)
+                        .fixedSize()
                 }
             }
             .foregroundStyle(active ? Palette.pink : Palette.text2)
@@ -906,6 +1002,73 @@ struct PlayerView: View {
                         Spacer()
                     }
                 }
+            }
+        }
+    }
+}
+
+/// 监听所在 NSScrollView 的滚动距离。
+/// macOS 的 ScrollView 由 NSScrollView 支撑，滚动只改变 clipView 的 bounds，
+/// 内容视图的 GeometryReader 不会收到更新，因此直接观察底层滚动视图。
+private struct ScrollOffsetObserver: NSViewRepresentable {
+    let onChange: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        context.coordinator.onChange = onChange
+        DispatchQueue.main.async { context.coordinator.attach(to: view) }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onChange = onChange
+        DispatchQueue.main.async { context.coordinator.attach(to: nsView) }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onChange: onChange)
+    }
+
+    final class Coordinator {
+        var onChange: (CGFloat) -> Void
+        private weak var scrollView: NSScrollView?
+        private var observer: NSObjectProtocol?
+
+        init(onChange: @escaping (CGFloat) -> Void) {
+            self.onChange = onChange
+        }
+
+        /// SwiftUI 插入视图层级有延迟，需要重试才能找到外层滚动视图。
+        func attach(to view: NSView, retries: Int = 40) {
+            guard scrollView == nil else { return }
+            var superview = view.superview
+            while let current = superview {
+                if let found = current as? NSScrollView {
+                    scrollView = found
+                    let clipView = found.contentView
+                    clipView.postsBoundsChangedNotifications = true
+                    observer = NotificationCenter.default.addObserver(
+                        forName: NSView.boundsDidChangeNotification,
+                        object: clipView,
+                        queue: .main
+                    ) { [weak self] _ in
+                        guard let self, let scrollView = self.scrollView else { return }
+                        self.onChange(max(0, scrollView.contentView.bounds.origin.y))
+                    }
+                    return
+                }
+                superview = current.superview
+            }
+            guard retries > 0 else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self, weak view] in
+                guard let self, let view else { return }
+                self.attach(to: view, retries: retries - 1)
+            }
+        }
+
+        deinit {
+            if let observer {
+                NotificationCenter.default.removeObserver(observer)
             }
         }
     }

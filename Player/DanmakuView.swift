@@ -84,8 +84,11 @@ struct VideoSurface: NSViewRepresentable {
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
             wantsLayer = true
-            layer = playerLayer
             playerLayer.videoGravity = .resizeAspect
+            // 作为子图层加入，而不是直接充当视图的 backing layer：
+            // 后者会脱离 SwiftUI 的层级与裁剪，播放区缩小时画面会溢出到下方。
+            layer?.masksToBounds = true
+            layer?.addSublayer(playerLayer)
         }
 
         required init?(coder: NSCoder) {
@@ -94,7 +97,10 @@ struct VideoSurface: NSViewRepresentable {
 
         override func layout() {
             super.layout()
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
             playerLayer.frame = bounds
+            CATransaction.commit()
         }
 
         func setPlayer(_ player: AVPlayer) {

@@ -203,7 +203,8 @@ struct MineView: View {
             // 收藏内容由 FavoriteBrowser 自行加载。
             break
         case .watchLater:
-            if watchLater.isEmpty { await loadWatchLater() }
+            // 每次进入都重新拉取，保证刚添加的视频能出现在列表里。
+            await loadWatchLater()
         }
     }
 

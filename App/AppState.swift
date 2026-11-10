@@ -137,4 +137,28 @@ final class AppState: ObservableObject {
             if toast == message { toast = nil }
         }
     }
+
+    /// 把列表里的视频加入稍后再看。
+    func addToWatchLater(_ video: VideoCard) {
+        guard BiliClient.shared.isLoggedIn else {
+            showLogin = true
+            return
+        }
+        guard let aid = video.aid else {
+            showToast("无法添加到稍后再看")
+            return
+        }
+        Task {
+            do {
+                let code = try await BiliAPI.addWatchLater(aid: aid)
+                guard code == 0 else {
+                    showToast("添加失败（\(code)）")
+                    return
+                }
+                showToast("已添加到稍后再看")
+            } catch {
+                showToast(error.localizedDescription)
+            }
+        }
+    }
 }

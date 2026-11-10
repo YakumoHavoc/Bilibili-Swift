@@ -472,6 +472,15 @@ struct SpaceInfoData: Decodable {
     let level: Int?
 }
 
+/// App 端空间接口的返回，只用到个人资料里的所在地。
+struct AppSpaceData: Decodable {
+    let card: AppSpaceCard?
+}
+
+struct AppSpaceCard: Decodable {
+    let place: String?
+}
+
 struct SpaceVideoData: Decodable {
     let list: SpaceVideoList?
     let page: SpacePage?
@@ -505,6 +514,8 @@ struct SpaceVideoDTO: Decodable {
 struct ReplyData: Decodable {
     let page: ReplyPage?
     let replies: [Reply]?
+    /// UP 主置顶的评论，用于取 UP 主的 IP 属地。
+    let upper: Reply?
 }
 
 struct ReplyPage: Decodable {
@@ -518,10 +529,22 @@ struct Reply: Decodable, Identifiable {
     let content: ReplyContent?
     let like: Int?
     let ctime: Int?
+    let reply_control: ReplyControl?
     var id: Int { rpid ?? 0 }
+
+    /// 评论者的 IP 属地（登录后由接口返回，形如「IP属地：浙江」）。
+    var location: String? {
+        guard let location = reply_control?.location, !location.isEmpty else { return nil }
+        return location
+    }
+}
+
+struct ReplyControl: Decodable {
+    let location: String?
 }
 
 struct ReplyMember: Decodable {
+    let mid: Int?
     let uname: String?
     let avatar: String?
 }

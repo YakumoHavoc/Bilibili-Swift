@@ -552,7 +552,12 @@ struct PlayerView: View {
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(Palette.text1)
                             if let mid = viewModel.upMid {
-                                Text("UID \(mid)")
+                                Text(verbatim: "UID \(mid)")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Palette.text3)
+                            }
+                            if !viewModel.upLocation.isEmpty {
+                                Text(viewModel.upLocation)
                                     .font(.system(size: 11))
                                     .foregroundStyle(Palette.text3)
                             }
@@ -671,6 +676,11 @@ struct PlayerView: View {
                                 Text(Fmt.relativeDate(reply.ctime ?? 0))
                                     .font(.system(size: 10))
                                     .foregroundStyle(Palette.text3)
+                                if let location = reply.location {
+                                    Text(location)
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(Palette.text3)
+                                }
                             }
                             Text(reply.content?.message ?? "")
                                 .font(.system(size: 12))

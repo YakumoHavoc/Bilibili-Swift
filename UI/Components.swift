@@ -294,6 +294,7 @@ struct VideoCardView: View {
     let onOpen: () -> Void
     var onOpenUp: (() -> Void)?
 
+    @EnvironmentObject private var app: AppState
     @State private var hovering = false
 
     var body: some View {
@@ -350,8 +351,9 @@ struct VideoCardView: View {
         .onTapGesture(perform: onOpen)
         .contextMenu {
             Button("播放", action: onOpen)
+            Button("添加到稍后再看") { app.addToWatchLater(video) }
             if let onOpenUp, let mid = video.upMid {
-                Button("打开 UP 主空间（\(mid)）", action: onOpenUp)
+                Button("打开 UP 主空间（" + String(mid) + "）", action: onOpenUp)
             }
             Button("在浏览器打开") {
                 if let url = URL(string: video.watchURL) {
@@ -370,6 +372,7 @@ struct VideoRowView: View {
     let onOpen: () -> Void
     var onOpenUp: (() -> Void)?
 
+    @EnvironmentObject private var app: AppState
     @State private var hovering = false
 
     var body: some View {
@@ -421,6 +424,7 @@ struct VideoRowView: View {
         .onTapGesture(perform: onOpen)
         .contextMenu {
             Button("播放", action: onOpen)
+            Button("添加到稍后再看") { app.addToWatchLater(video) }
             if let onOpenUp {
                 Button("打开 UP 主空间", action: onOpenUp)
             }

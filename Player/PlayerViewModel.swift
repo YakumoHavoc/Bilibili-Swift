@@ -92,6 +92,8 @@ final class PlayerViewModel: ObservableObject {
     @Published var selectedQuality: Int
     /// 当前音轨的音质说明（Hi-Res 无损 / 杜比全景声）。
     @Published var audioQualityTitle = ""
+    /// UP 主的 IP 属地：优先取本人评论，其次空间页的所在地。
+    @Published var upLocation = ""
     @Published var playbackRate: Double = 1
     @Published var danmakuItems: [DanmakuLaneItem] = []
     @Published var liveMessages: [LiveDanmakuMessage] = []
@@ -129,6 +131,8 @@ final class PlayerViewModel: ObservableObject {
     private var timeControlObservation: NSKeyValueObservation?
     private var failedObserver: NSObjectProtocol?
     private var suppressSeekUpdate = false
+    /// 当前播放项使用的 DASH 资源加载器，需与播放项同生命周期持有。
+    private var dashLoaders: [DashResourceLoader] = []
     private var liveDanmaku: LiveDanmakuClient?
     private var liveDanmakuSeq = 0
     private var nextLiveLane = 0
@@ -215,6 +219,7 @@ final class PlayerViewModel: ObservableObject {
     func load() async {
         isLoading = true
         errorMessage = nil
+        upLocation = ""
 
         do {
             switch mode {
@@ -536,6 +541,7 @@ final class PlayerViewModel: ObservableObject {
            let raw = mp4.durl?.first?.url, let url = URL(string: raw) {
             audioQualityTitle = ""
             let item = AVPlayerItem(asset: AVURLAsset(url: url, options: assetOptions()))
+            retainDashLoaders([])
             replaceItem(item, duration: nil)
             return
         }
@@ -586,58 +592,39 @@ final class PlayerViewModel: ObservableObject {
 
     private func applyPlayURL(_ data: PlayURLData) async throws {
         if let dash = data.dash {
-            let options = assetOptions()
-            let total = dash.duration.map { CMTime(seconds: Double($0), preferredTimescale: 1000) }
-
-            // 音视频轨并行挑选，任一轨的多个 CDN 地址也并行尝试，避免逐条等待。
-            async let videoTask = pickTrack(videoCandidates(dash), mediaType: .video,
-                                            options: options, totalDuration: total)
-            async let audioTask = pickTrack(audioCandidates(dash), mediaType: .audio,
-                                            options: options, totalDuration: total)
-            let (playableVideo, playableAudio) = await (videoTask, audioTask)
-
-            guard let playableVideo else {
+            let headers = [
+                "Referer": referer,
+                "User-Agent": BiliClient.userAgent,
+                "Origin": "https://www.bilibili.com"
+            ]
+            guard let selection = await makeDashLoader(videos: videoCandidates(dash),
+                                                       audios: audioCandidates(dash),
+                                                       headers: headers) else {
                 throw BiliError.decoding("该视频暂不支持播放（编码不兼容）")
             }
-
-            let composition = AVMutableComposition()
-            if let compositionTrack = composition.addMutableTrack(withMediaType: .video,
-                                                                  preferredTrackID: kCMPersistentTrackID_Invalid) {
-                try compositionTrack.insertTimeRange(CMTimeRange(start: .zero, duration: playableVideo.duration),
-                                                     of: playableVideo.track, at: .zero)
+            audioQualityTitle = Self.audioQualityName(selection.audioID)
+            guard let asset = selection.loader.makeAsset() else {
+                throw BiliError.decoding("该视频暂不支持播放（编码不兼容）")
             }
-
-            // 音频失败不应导致整个视频无法播放，仅在可用时合入音轨。
-            if let playableAudio,
-               let compositionTrack = composition.addMutableTrack(withMediaType: .audio,
-                                                                  preferredTrackID: kCMPersistentTrackID_Invalid) {
-                let use = CMTimeMinimum(playableVideo.duration, playableAudio.duration)
-                try compositionTrack.insertTimeRange(CMTimeRange(start: .zero, duration: use),
-                                                     of: playableAudio.track, at: .zero)
-                audioQualityTitle = Self.audioQualityName(playableAudio.id)
-            } else {
-                audioQualityTitle = ""
-            }
-
-            let item = AVPlayerItem(asset: composition)
-            replaceItem(item, duration: playableVideo.duration.seconds)
+            let item = AVPlayerItem(asset: asset)
+            retainDashLoaders([selection.loader])
+            replaceItem(item, duration: dash.duration.map { Double($0) })
         } else if let durl = data.durl?.first?.url, let url = URL(string: durl) {
             audioQualityTitle = ""
             let asset = AVURLAsset(url: url, options: assetOptions())
             let item = AVPlayerItem(asset: asset)
             let length = try await asset.load(.duration)
+            retainDashLoaders([])
             replaceItem(item, duration: length.seconds)
         } else {
             throw BiliError.decoding("未获取到可播放的视频流")
         }
     }
 
-    /// 可以在合成器中使用的单条轨道。
-    private struct PlayableTrack {
-        let asset: AVURLAsset
-        let track: AVAssetTrack
-        let duration: CMTime
-        let id: Int?
+    /// 选中并在 CDN 上验证过的 DASH 组合。
+    private struct DashSelection {
+        let loader: DashResourceLoader
+        let audioID: Int?
     }
 
     private static func audioQualityName(_ id: Int?) -> String {
@@ -648,65 +635,45 @@ final class PlayerViewModel: ObservableObject {
         }
     }
 
-    /// 按优先级逐轨尝试，每轨的主地址与备用地址并行竞速，4 秒未成功即换下一轨。
-    private func pickTrack(_ tracks: [DashTrack], mediaType: AVMediaType,
-                           options: [String: Any],
-                           totalDuration: CMTime?) async -> PlayableTrack? {
-        for track in tracks {
-            if let result = await loadPlayableAsset(track: track, mediaType: mediaType,
-                                                    options: options, totalDuration: totalDuration) {
-                return result
+    /// 依次尝试音视频轨的各个 CDN 地址，取第一个能读到索引的组合。
+    /// 音轨不可用时退化为纯视频播放，不影响画面。
+    private func makeDashLoader(videos: [DashTrack], audios: [DashTrack],
+                                headers: [String: String]) async -> DashSelection? {
+        var audioURL: URL?
+        var audioID: Int?
+        for track in audios.prefix(3) {
+            guard let raw = track.url, let url = URL(string: raw) else { continue }
+            if await DashResourceLoader.hasIndex(url, headers: headers) {
+                audioURL = url
+                audioID = track.id
+                break
+            }
+        }
+
+        var tried = 0
+        for track in videos {
+            var candidates: [String] = []
+            if let url = track.url, !url.isEmpty { candidates.append(url) }
+            candidates.append(contentsOf: track.backups)
+            for value in candidates where tried < 4 {
+                guard let url = URL(string: value) else { continue }
+                tried += 1
+                let loader = DashResourceLoader(videoURL: url, audioURL: audioURL, headers: headers)
+                if await loader.prepare() {
+                    return DashSelection(loader: loader, audioID: audioID)
+                }
+                loader.invalidate()
             }
         }
         return nil
     }
 
-    private func loadPlayableAsset(track: DashTrack, mediaType: AVMediaType,
-                                   options: [String: Any],
-                                   totalDuration: CMTime?) async -> PlayableTrack? {
-        var urls: [String] = []
-        if let url = track.url, !url.isEmpty { urls.append(url) }
-        urls.append(contentsOf: track.backups)
-        let targets = urls.compactMap { URL(string: $0) }
-        guard !targets.isEmpty else { return nil }
-
-        let trackID = track.id
-        return await withCheckedContinuation { continuation in
-            let lock = NSLock()
-            var finished = false
-
-            func finish(_ value: PlayableTrack?) {
-                lock.lock()
-                if finished { lock.unlock(); return }
-                finished = true
-                lock.unlock()
-                continuation.resume(returning: value)
-            }
-
-            for url in targets {
-                Task.detached {
-                    let asset = AVURLAsset(url: url, options: options)
-                    // 先读 duration 校验资源可访问，再取轨道（顺序反了在 mcdn 上会失败）。
-                    guard let loaded = try? await asset.load(.duration),
-                          loaded.isValid, loaded.seconds.isFinite, loaded.seconds > 0,
-                          let source = try? await asset.loadTracks(withMediaType: mediaType).first else { return }
-                    var duration = totalDuration
-                    if duration == nil || duration?.seconds.isFinite != true {
-                        duration = loaded
-                    }
-                    guard let resolved = duration, resolved.isValid,
-                          resolved.seconds.isFinite, resolved.seconds > 0 else { return }
-                    finish(PlayableTrack(asset: asset, track: source,
-                                         duration: resolved, id: trackID))
-                }
-            }
-
-            // 单个 CDN 节点长时间无响应时不再死等。
-            Task.detached {
-                try? await Task.sleep(nanoseconds: 4_000_000_000)
-                finish(nil)
-            }
-        }
+    /// 保活当前播放项使用的 DASH 转发器，其余立即释放。
+    private func retainDashLoaders(_ loaders: [DashResourceLoader?]) {
+        let next = loaders.compactMap { $0 }
+        let keep = Set(next.map { ObjectIdentifier($0) })
+        dashLoaders.filter { !keep.contains(ObjectIdentifier($0)) }.forEach { $0.invalidate() }
+        dashLoaders = next
     }
 
     private func replaceItem(_ item: AVPlayerItem, duration: Double?) {
@@ -878,6 +845,7 @@ final class PlayerViewModel: ObservableObject {
         }
         player.pause()
         player.replaceCurrentItem(with: nil)
+        retainDashLoaders([])
         isPlaying = false
     }
 
@@ -1094,5 +1062,19 @@ final class PlayerViewModel: ObservableObject {
         guard let data = try? await BiliAPI.replies(aid: aid) else { return }
         comments = data.replies ?? []
         repliesCount = data.page?.count ?? 0
+        await resolveUpLocation(comments: data.replies ?? [], pinned: data.upper)
+    }
+
+    /// UP 主的 IP 属地：优先取本人（含置顶）评论的属地，没有再退回空间页的所在地。
+    private func resolveUpLocation(comments: [Reply], pinned: Reply?) async {
+        guard let upMid else { return }
+        let candidates = [pinned].compactMap { $0 } + comments
+        if let location = candidates.first(where: { $0.member?.mid == upMid })?.location {
+            upLocation = location
+            return
+        }
+        if let place = await BiliAPI.spacePlace(mid: upMid) {
+            upLocation = "所在地：\(place)"
+        }
     }
 }

@@ -1226,6 +1226,11 @@ struct DynamicCommentList: View {
                     Text(Fmt.relativeDate(reply.ctime ?? 0))
                         .font(.system(size: 11))
                         .foregroundStyle(Palette.text3)
+                    if let location = reply.location {
+                        Text(location)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Palette.text3)
+                    }
                 }
                 if let content = reply.content {
                     CommentMessageText(message: content.message ?? "",

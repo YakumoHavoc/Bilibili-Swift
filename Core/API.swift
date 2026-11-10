@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 @MainActor
 enum BiliAPI {
@@ -372,6 +373,47 @@ enum BiliAPI {
             "https://api.bilibili.com/x/v2/history/toview/web",
             referer: "https://www.bilibili.com/watchlater/"
         )
+    }
+
+    /// 把视频加入稍后再看，返回接口 code（0 为成功）。
+    static func addWatchLater(aid: Int) async throws -> Int {
+        try await BiliClient.shared.postForm(
+            "https://api.bilibili.com/x/v2/history/toview/add",
+            params: ["aid": String(aid)],
+            referer: "https://www.bilibili.com/watchlater/"
+        )
+    }
+
+    /// UP 主空间页展示的所在地（个人资料里自行填写）。
+    ///
+    /// 网页接口不返回该字段，只能走 App 端的空间接口（需要 appkey 签名）。
+    static func spacePlace(mid: Int) async -> String? {
+        let appKey = "1d8b6e7d45233436"
+        let appSecret = "560c52ccd288fed045859ed18bffd973"
+        var fields = [
+            "vmid": String(mid),
+            "appkey": appKey,
+            "ts": String(Int(Date().timeIntervalSince1970)),
+            "mobi_app": "android",
+            "platform": "android",
+            "build": "7000000"
+        ]
+        let query = fields.sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: "&")
+        let digest = Insecure.MD5.hash(data: Data((query + appSecret).utf8))
+        fields["sign"] = digest.map { String(format: "%02x", $0) }.joined()
+        let body = fields.sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: "&")
+        let data: AppSpaceData? = try? await BiliClient.shared.get(
+            "https://app.bilibili.com/x/v2/space?" + body,
+            referer: "https://space.bilibili.com/\(mid)"
+        )
+        guard let place = data?.card?.place?.trimmingCharacters(in: .whitespaces), !place.isEmpty else {
+            return nil
+        }
+        return place
     }
 
     // MARK: - 动态

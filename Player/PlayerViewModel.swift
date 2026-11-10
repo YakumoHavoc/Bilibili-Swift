@@ -100,12 +100,14 @@ final class PlayerViewModel: ObservableObject {
     @Published var seasonEpisodes: [UgcEpisode] = []
     /// 当前播放视频在合集内的 aid，用于高亮。
     @Published var currentSeasonAid: Int?
+    /// 播放页右侧的相关视频推荐。
+    @Published var relatedVideos: [VideoCard] = []
+    @Published var isLoadingRelated = false
     /// 互动数据与当前账号的互动状态。
     @Published var likeCount = 0
     @Published var coinCount = 0
     @Published var favoriteCount = 0
     @Published var isLiked = false
-    @Published var isDisliked = false
     @Published var isFavorited = false
     @Published var coinsGiven = 0
     /// 收藏时使用的收藏夹 id，首次操作时获取。
@@ -282,7 +284,6 @@ final class PlayerViewModel: ObservableObject {
         coinCount = detail.stat?.coin ?? 0
         favoriteCount = detail.stat?.favorite ?? 0
         isLiked = false
-        isDisliked = false
         isFavorited = false
         coinsGiven = 0
         favoriteFolderID = nil
@@ -307,6 +308,7 @@ final class PlayerViewModel: ObservableObject {
         // 弹幕与评论不阻塞播放，后台并行加载。
         startAuxiliaryLoading(cid: cid)
         Task { @MainActor [weak self] in await self?.loadRelation() }
+        Task { @MainActor [weak self] in await self?.loadRelated() }
 
         try await refreshPlayURL()
     }
@@ -998,10 +1000,23 @@ final class PlayerViewModel: ObservableObject {
         guard let bvid, BiliClient.shared.isLoggedIn else { return }
         guard let relation = try? await BiliAPI.videoRelation(bvid: bvid), self.bvid == bvid else { return }
         isLiked = relation.like ?? false
-        isDisliked = relation.dislike ?? false
         isFavorited = relation.favorite ?? false
         coinsGiven = relation.coin ?? 0
     }
+
+    /// 相关视频推荐，加载失败时保持为空。
+    private func loadRelated() async {
+        guard let bvid else { return }
+        relatedVideos = []
+        isLoadingRelated = true
+        defer { isLoadingRelated = false }
+        guard let list = try? await BiliAPI.relatedVideos(bvid: bvid), self.bvid == bvid else { return }
+        relatedVideos = list
+    }
+
+    /// 当前播放视频的 aid 与标识，供播放页的推荐反馈使用。
+    var currentAid: Int? { aid }
+    var currentVideoID: String { bvid ?? aid.map { "av\($0)" } ?? "" }
 
     func toggleLike() async {
         guard let aid else { return }
@@ -1009,12 +1024,6 @@ final class PlayerViewModel: ObservableObject {
         guard let code = try? await BiliAPI.likeVideo(aid: aid, like: target), code == 0 else { return }
         isLiked = target
         likeCount = max(0, likeCount + (target ? 1 : -1))
-    }
-
-    func dislike() async {
-        guard let aid, !isDisliked else { return }
-        guard let code = try? await BiliAPI.dislikeVideo(aid: aid), code == 0 else { return }
-        isDisliked = true
     }
 
     func addCoin() async {

@@ -217,9 +217,10 @@ final class BiliClient {
     @discardableResult
     func postForm(_ urlString: String,
                   params: [String: String] = [:],
-                  referer: String = BiliClient.webReferer) async throws -> Int {
+                  referer: String = BiliClient.webReferer,
+                  signed: Bool = false) async throws -> Int {
         guard isLoggedIn else { return -101 }
-        guard let url = URL(string: urlString) else { throw BiliError.invalidURL }
+        let url = try await buildURL(urlString, params: [:], signed: signed)
         var request = makeRequest(url: url, referer: referer, method: "POST")
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         var fields = params

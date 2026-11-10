@@ -27,17 +27,24 @@ struct PlayerView: View {
 
     /// 直播弹幕侧栏宽度（右侧显示时）。
     private static let chatPanelWidth: CGFloat = 320
+    /// 相关推荐侧栏宽度。
+    private static let relatedPaneWidth: CGFloat = 300
 
     var body: some View {
         GeometryReader { proxy in
             let chatOnRight = viewModel.showsLiveChat && viewModel.liveChatPlacement == .right
             let chatHidden = viewModel.showsLiveChat && viewModel.liveChatPlacement == .hidden
-            let videoWidth = chatOnRight
-                ? max(320, proxy.size.width - Self.chatPanelWidth)
-                : proxy.size.width
             // 右侧显示、隐藏弹幕或隐藏详情时，画面区域铺满窗口，不留下方占位。
             let hidesDetail = !viewModel.showsLiveChat && isDetailHidden
             let fillsHeight = chatOnRight || chatHidden || hidesDetail
+            // 相关推荐贯穿窗口右侧（从播放区顶端一直到底部），隐藏详情时一并隐藏。
+            let showRelated = !fillsHeight && showsRelatedPane(proxy.size.width)
+            let columnWidth = chatOnRight
+                ? proxy.size.width
+                : proxy.size.width - (showRelated ? Self.relatedPaneWidth + 1 : 0)
+            let videoWidth = chatOnRight
+                ? max(320, proxy.size.width - Self.chatPanelWidth)
+                : columnWidth
             let baseHeight = fillsHeight
                 ? proxy.size.height
                 : min(videoWidth * 9.0 / 16.0, max(280, proxy.size.height * 0.66))
@@ -46,29 +53,40 @@ struct PlayerView: View {
                 ? 0
                 : min(1, max(0, detailScrollOffset / Self.collapseDistance))
             let playerHeight = baseHeight * (1 - collapse)
-            VStack(spacing: 0) {
-                if chatOnRight {
-                    HStack(spacing: 0) {
-                        playerArea(collapse: collapse)
-                            .frame(width: videoWidth)
-                        Rectangle()
-                            .fill(Palette.line)
-                            .frame(width: 1)
-                        liveChatPanel
-                            .frame(width: Self.chatPanelWidth)
-                    }
-                    .frame(width: proxy.size.width, height: playerHeight)
-                } else {
-                    playerArea(collapse: collapse)
-                        .frame(width: proxy.size.width, height: playerHeight)
-                        .clipped()
-                    if viewModel.showsLiveChat {
-                        if viewModel.liveChatPlacement == .bottom {
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    if chatOnRight {
+                        HStack(spacing: 0) {
+                            playerArea(collapse: collapse)
+                                .frame(width: videoWidth)
+                            Rectangle()
+                                .fill(Palette.line)
+                                .frame(width: 1)
                             liveChatPanel
+                                .frame(width: Self.chatPanelWidth)
                         }
-                    } else if !isDetailHidden {
-                        detailPanel
+                        .frame(width: columnWidth, height: playerHeight)
+                    } else {
+                        playerArea(collapse: collapse)
+                            .frame(width: columnWidth, height: playerHeight)
+                            .clipped()
+                        if viewModel.showsLiveChat {
+                            if viewModel.liveChatPlacement == .bottom {
+                                liveChatPanel
+                            }
+                        } else if !isDetailHidden {
+                            detailPanel
+                        }
                     }
+                }
+                .frame(width: columnWidth)
+
+                if showRelated {
+                    Rectangle()
+                        .fill(Palette.line)
+                        .frame(width: 1)
+                    relatedPane
+                        .frame(width: Self.relatedPaneWidth)
                 }
             }
             .overlay(alignment: .bottomTrailing) {
@@ -98,6 +116,19 @@ struct PlayerView: View {
             scrollToTopToken += 1
         }
         .onDisappear { viewModel.stop() }
+        .overlay(alignment: .bottom) {
+            if let toast = app.toast {
+                Text(toast)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 9)
+                    .background(Color.black.opacity(0.78))
+                    .clipShape(Capsule())
+                    .padding(.bottom, 32)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     // MARK: - 播放区
@@ -583,6 +614,61 @@ struct PlayerView: View {
         return luminance > 0.85 ? Palette.text1 : Color(nsColor: color)
     }
 
+    // MARK: - 相关推荐
+
+    /// 窗口足够宽时在详情右侧显示相关推荐。
+    private func showsRelatedPane(_ width: CGFloat) -> Bool {
+        !viewModel.isLive && !viewModel.isRecordingPlayback && width >= 760
+    }
+
+    /// 隐藏已反馈过不感兴趣的视频与 UP 主，并排除当前视频。
+    private var visibleRelatedVideos: [VideoCard] {
+        viewModel.relatedVideos.filter {
+            $0.id != viewModel.currentVideoID && !app.isHidden($0)
+        }
+    }
+
+    private var relatedPane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text("相关推荐")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Palette.text1)
+                Spacer()
+                if viewModel.isLoadingRelated {
+                    ProgressView().controlSize(.mini)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+
+            Rectangle()
+                .fill(Palette.line)
+                .frame(height: 1)
+
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    if visibleRelatedVideos.isEmpty {
+                        Text(viewModel.isLoadingRelated ? "正在加载相关推荐…" : "暂无相关推荐")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Palette.text3)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 24)
+                    } else {
+                        ForEach(visibleRelatedVideos) { video in
+                            RelatedVideoRow(video: video) {
+                                // 每次都打开新的播放窗口。
+                                app.play(video: video)
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+        }
+        .background(Palette.bg)
+    }
+
     // MARK: - 详情
 
     private var detailPanel: some View {
@@ -794,7 +880,7 @@ struct PlayerView: View {
         }
     }
 
-    /// 点赞 / 不喜欢 / 投币 / 收藏，合集与非合集视频通用。
+    /// 点赞 / 投币 / 收藏 / 转发，合集与非合集视频通用。
     /// 窗口较窄时退回只显示图标的紧凑样式，避免文字被压成竖排。
     private var videoActionsRow: some View {
         ViewThatFits(in: .horizontal) {
@@ -804,12 +890,6 @@ struct PlayerView: View {
                          active: viewModel.isLiked) {
                 guard requireLogin() else { return }
                 Task { await viewModel.toggleLike() }
-            }
-            actionButton(icon: "hand.thumbsdown",
-                         count: nil,
-                         active: viewModel.isDisliked) {
-                guard requireLogin() else { return }
-                Task { await viewModel.dislike() }
             }
             actionButton(icon: "bitcoinsign.circle",
                          count: viewModel.coinCount,
@@ -841,6 +921,23 @@ struct PlayerView: View {
             }
             .buttonStyle(.plain)
             .help("转发给朋友")
+
+            feedbackMenu {
+                HStack(spacing: 4) {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 12, weight: .medium))
+                    Text("更多")
+                        .font(.system(size: 11))
+                        .lineLimit(1)
+                        .fixedSize()
+                }
+                .foregroundStyle(Palette.text2)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Palette.bg)
+                .clipShape(Capsule())
+                .contentShape(Capsule())
+            }
             }
             .fixedSize(horizontal: true, vertical: false)
 
@@ -849,10 +946,6 @@ struct PlayerView: View {
                                     active: viewModel.isLiked) {
                     guard requireLogin() else { return }
                     Task { await viewModel.toggleLike() }
-                }
-                compactActionButton(icon: "hand.thumbsdown", active: viewModel.isDisliked) {
-                    guard requireLogin() else { return }
-                    Task { await viewModel.dislike() }
                 }
                 compactActionButton(icon: "bitcoinsign.circle", active: viewModel.coinsGiven > 0) {
                     guard requireLogin() else { return }
@@ -868,7 +961,39 @@ struct PlayerView: View {
                 }
                 .buttonStyle(.plain)
                 .help("转发给朋友")
+
+                feedbackMenu {
+                    compactIcon("ellipsis", active: false)
+                }
             }
+        }
+    }
+
+    /// 「内容不感兴趣 / 不想看此 UP 主」反馈菜单。
+    private func feedbackMenu<Label: View>(@ViewBuilder label: () -> Label) -> some View {
+        Menu {
+            Button("内容不感兴趣") { reportFeedback(upOnly: false) }
+            Button("不想看此 UP 主") { reportFeedback(upOnly: true) }
+        } label: {
+            label()
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("减少类似内容的推荐")
+    }
+
+    private func reportFeedback(upOnly: Bool) {
+        guard requireLogin() else { return }
+        guard let aid = viewModel.currentAid else {
+            app.showToast("无法获取该视频信息")
+            return
+        }
+        Task {
+            await app.reportDislike(aid: aid,
+                                    upMid: viewModel.upMid,
+                                    videoID: viewModel.currentVideoID,
+                                    upOnly: upOnly)
         }
     }
 
@@ -1028,6 +1153,52 @@ struct PlayerView: View {
                 }
             }
         }
+    }
+}
+
+/// 播放页右侧的相关推荐行。
+private struct RelatedVideoRow: View {
+    let video: VideoCard
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 8) {
+                RemoteImage(url: ImageURL.thumb(video.cover))
+                    .frame(width: 104, height: 65)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(video.title)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Palette.text1)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Text(video.upName.isEmpty ? "UP主" : video.upName)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.text3)
+                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        Text("\(Fmt.count(video.views)) 播放")
+                        Text(Fmt.duration(video.duration))
+                    }
+                    .font(.system(size: 10))
+                    .foregroundStyle(Palette.text3)
+                }
+                .frame(height: 65, alignment: .top)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(hovering ? Palette.hover : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 

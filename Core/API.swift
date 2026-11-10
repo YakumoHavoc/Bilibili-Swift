@@ -343,7 +343,7 @@ enum BiliAPI {
         )
     }
 
-    // MARK: - 视频互动（点赞 / 不喜欢 / 投币 / 收藏）
+    // MARK: - 视频互动（点赞 / 投币 / 收藏）
 
     static func videoRelation(bvid: String) async throws -> VideoRelationData {
         try await BiliClient.shared.get(
@@ -357,14 +357,6 @@ enum BiliAPI {
         try await BiliClient.shared.postForm(
             "https://api.bilibili.com/x/web-interface/archive/like",
             params: ["aid": String(aid), "like": like ? "1" : "2"],
-            referer: "https://www.bilibili.com/"
-        )
-    }
-
-    static func dislikeVideo(aid: Int) async throws -> Int {
-        try await BiliClient.shared.postForm(
-            "https://api.bilibili.com/x/web-interface/archive/dislike",
-            params: ["aid": String(aid)],
             referer: "https://www.bilibili.com/"
         )
     }
@@ -384,6 +376,40 @@ enum BiliAPI {
             "https://api.bilibili.com/x/v3/fav/resource/deal",
             params: params,
             referer: "https://www.bilibili.com/"
+        )
+    }
+
+    // MARK: - 推荐反馈
+
+    /// 相关视频推荐（最多 40 条）。
+    static func relatedVideos(bvid: String) async throws -> [VideoCard] {
+        let items: [FeedVideoDTO] = try await BiliClient.shared.get(
+            "https://api.bilibili.com/x/web-interface/archive/related",
+            params: ["bvid": bvid],
+            referer: "https://www.bilibili.com/video/\(bvid)/"
+        )
+        return items.map(VideoCard.init(dto:))
+    }
+
+    /// 推荐反馈：reasonID 1 为「内容不感兴趣」，4 为「不想看此 UP 主」。
+    /// 该接口由 WBI 签名保护，故需要 signed。
+    static func feedbackDislike(aid: Int, upMid: Int, reasonID: Int) async throws -> Int {
+        try await BiliClient.shared.postForm(
+            "https://api.bilibili.com/x/web-interface/feedback/dislike",
+            params: [
+                "app_id": "100",
+                "platform": "5",
+                "from_spmid": "",
+                "spmid": "333.1007.0.0",
+                "feedback_page": "1",
+                "goto": "av",
+                "id": String(aid),
+                "mid": String(upMid),
+                "track_id": "",
+                "reason_id": String(reasonID)
+            ],
+            referer: "https://www.bilibili.com/",
+            signed: true
         )
     }
 

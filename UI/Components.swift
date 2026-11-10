@@ -352,6 +352,10 @@ struct VideoCardView: View {
         .contextMenu {
             Button("播放", action: onOpen)
             Button("添加到稍后再看") { app.addToWatchLater(video) }
+            Divider()
+            Button("内容不感兴趣") { app.reportDislike(video, upOnly: false) }
+            Button("不想看此 UP 主") { app.reportDislike(video, upOnly: true) }
+            Divider()
             if let onOpenUp, let mid = video.upMid {
                 Button("打开 UP 主空间（" + String(mid) + "）", action: onOpenUp)
             }
@@ -425,6 +429,10 @@ struct VideoRowView: View {
         .contextMenu {
             Button("播放", action: onOpen)
             Button("添加到稍后再看") { app.addToWatchLater(video) }
+            Divider()
+            Button("内容不感兴趣") { app.reportDislike(video, upOnly: false) }
+            Button("不想看此 UP 主") { app.reportDislike(video, upOnly: true) }
+            Divider()
             if let onOpenUp {
                 Button("打开 UP 主空间", action: onOpenUp)
             }
@@ -570,13 +578,15 @@ struct VideoGrid: View {
     var openUp: ((Int) -> Void)?
     let onOpen: (VideoCard) -> Void
 
+    @EnvironmentObject private var app: AppState
+
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: minWidth, maximum: 420), spacing: 18, alignment: .top)]
     }
 
     var body: some View {
         LazyVGrid(columns: columns, spacing: 22) {
-            ForEach(videos) { video in
+            ForEach(videos.filter { !app.isHidden($0) }) { video in
                 VideoCardView(video: video,
                               onOpen: { onOpen(video) },
                               onOpenUp: openUp == nil ? nil : {

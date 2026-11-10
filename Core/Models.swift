@@ -27,7 +27,6 @@ struct Stat: Decodable {
 /// 当前账号对某视频的互动状态。
 struct VideoRelationData: Decodable {
     let like: Bool?
-    let dislike: Bool?
     /// 已投币数量。
     let coin: Int?
     let favorite: Bool?

@@ -42,6 +42,10 @@ final class AppState: ObservableObject {
     @Published var showLogin = false
     @Published var toast: String?
 
+    /// 已反馈「不感兴趣」的视频，以及已反馈「不想看此 UP 主」的 mid，仅本机内存生效。
+    @Published private(set) var hiddenVideoIDs: Set<String> = []
+    @Published private(set) var hiddenUpMids: Set<Int> = []
+
     @Published var themeMode: ThemeMode {
         didSet { UserDefaults.standard.set(themeMode.rawValue, forKey: "app.theme") }
     }
@@ -160,5 +164,54 @@ final class AppState: ObservableObject {
                 showToast(error.localizedDescription)
             }
         }
+    }
+
+    // MARK: - 推荐反馈
+
+    /// 该视频是否已被本机隐藏（不感兴趣或不想看此 UP 主）。
+    func isHidden(_ video: VideoCard) -> Bool {
+        if let mid = video.upMid, hiddenUpMids.contains(mid) { return true }
+        return hiddenVideoIDs.contains(video.id)
+    }
+
+    /// 对列表卡片反馈：内容不感兴趣 / 不想看此 UP 主。
+    func reportDislike(_ video: VideoCard, upOnly: Bool) {
+        guard BiliClient.shared.isLoggedIn else {
+            showLogin = true
+            return
+        }
+        guard let aid = video.aid else {
+            showToast("无法获取该视频信息")
+            return
+        }
+        Task {
+            await reportDislike(aid: aid, upMid: video.upMid, videoID: video.id, upOnly: upOnly)
+        }
+    }
+
+    /// 对当前播放的视频反馈：内容不感兴趣 / 不想看此 UP 主。
+    func reportDislike(aid: Int, upMid: Int?, videoID: String, upOnly: Bool) async {
+        guard BiliClient.shared.isLoggedIn else {
+            showLogin = true
+            return
+        }
+        do {
+            let code = try await BiliAPI.feedbackDislike(aid: aid,
+                                                         upMid: upMid ?? 0,
+                                                         reasonID: upOnly ? 4 : 1)
+            guard code == 0 else {
+                showToast("反馈失败（\(code)）")
+                return
+            }
+        } catch {
+            showToast("反馈失败：\(error.localizedDescription)")
+            return
+        }
+        if upOnly, let upMid {
+            hiddenUpMids.insert(upMid)
+        } else {
+            hiddenVideoIDs.insert(videoID)
+        }
+        showToast(upOnly ? "已减少该 UP 主的推荐" : "已反馈，将减少类似内容")
     }
 }

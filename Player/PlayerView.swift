@@ -49,7 +49,7 @@ struct PlayerView: View {
             VStack(spacing: 0) {
                 if chatOnRight {
                     HStack(spacing: 0) {
-                        playerArea
+                        playerArea(collapse: collapse)
                             .frame(width: videoWidth)
                         Rectangle()
                             .fill(Palette.line)
@@ -59,7 +59,7 @@ struct PlayerView: View {
                     }
                     .frame(width: proxy.size.width, height: playerHeight)
                 } else {
-                    playerArea
+                    playerArea(collapse: collapse)
                         .frame(width: proxy.size.width, height: playerHeight)
                         .clipped()
                     if viewModel.showsLiveChat {
@@ -102,7 +102,7 @@ struct PlayerView: View {
 
     // MARK: - 播放区
 
-    private var playerArea: some View {
+    private func playerArea(collapse: CGFloat) -> some View {
         ZStack {
             Color.black
 
@@ -114,6 +114,11 @@ struct PlayerView: View {
                                opacity: app.danmakuOpacity,
                                fontSize: app.danmakuFontSize)
             }
+
+            // 滚动收起时，画面底部做磨砂淡出，与下方详情区的交界不再生硬。
+            boundaryFade
+                .opacity(min(1, Double(collapse) * 4))
+                .allowsHitTesting(false)
 
             if viewModel.isLoading || (viewModel.isLive && !viewModel.liveFrameReady && viewModel.errorMessage == nil) {
                 VStack(spacing: 10) {
@@ -171,6 +176,25 @@ struct PlayerView: View {
         .onHover { isHovering = $0 }
         .onTapGesture(count: 2) {
             NSApp.keyWindow?.toggleFullScreen(nil)
+        }
+    }
+
+    /// 播放区底部的磨砂渐变，让画面与下方详情区之间平滑过渡。
+    private var boundaryFade: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            ZStack(alignment: .bottom) {
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .mask(
+                        LinearGradient(colors: [.black, .clear],
+                                       startPoint: .bottom, endPoint: .top)
+                    )
+                LinearGradient(colors: [Palette.bg, .clear],
+                               startPoint: .bottom, endPoint: .top)
+                    .frame(height: 26)
+            }
+            .frame(height: 56)
         }
     }
 

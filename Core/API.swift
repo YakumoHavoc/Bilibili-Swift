@@ -260,6 +260,24 @@ enum BiliAPI {
         )
     }
 
+    /// 视频章节（分段）：UP 主在稿件里划分的时间点，来自播放器信息接口。
+    static func videoChapters(aid: Int, cid: Int) async throws -> [VideoChapter] {
+        let data: PlayerInfoData = try await BiliClient.shared.get(
+            "https://api.bilibili.com/x/player/wbi/v2",
+            params: ["aid": String(aid), "cid": String(cid)],
+            referer: "https://www.bilibili.com/video/av\(aid)",
+            signed: true
+        )
+        return (data.view_points ?? [])
+            .compactMap { point in
+                guard let start = point.from else { return nil }
+                let title = (point.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !title.isEmpty else { return nil }
+                return VideoChapter(id: Int(start), start: start, end: point.to ?? start, title: title)
+            }
+            .sorted { $0.start < $1.start }
+    }
+
     static func playURL(bvid: String, cid: Int, quality: Int = 80, fnval: Int = 4048) async throws -> PlayURLData {
         try await BiliClient.shared.get(
             "https://api.bilibili.com/x/player/playurl",

@@ -297,11 +297,16 @@ struct PlayerView: View {
                 }
                 .tint(Palette.pink)
                 .controlSize(.small)
+                .overlay { chapterMarks }
 
                 Text(Fmt.duration(Int(viewModel.duration)))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.9))
                     .monospacedDigit()
+
+                if !viewModel.chapters.isEmpty {
+                    chapterMenu
+                }
             } else {
                 Text(viewModel.isRecordingPlayback ? "录制回放" : "直播画面")
                     .font(.system(size: 11))
@@ -318,6 +323,22 @@ struct PlayerView: View {
             }
             .buttonStyle(.plain)
             .help("弹幕开关")
+
+            Button {
+                Task {
+                    if let url = await viewModel.captureSnapshot() {
+                        app.showToast("截图已保存：\(url.lastPathComponent)")
+                    } else {
+                        app.showToast("截图失败，请稍后重试")
+                    }
+                }
+            } label: {
+                Image(systemName: "camera")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+            .buttonStyle(.plain)
+            .help("截图（保存到 下载/哔哩哔哩/截图/视频名称）")
 
             if viewModel.showsLiveChat {
                 Menu {
@@ -440,6 +461,44 @@ struct PlayerView: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
+    }
+
+    /// 章节（分段）菜单：列出 UP 主划分的时间点，点击跳转。
+    private var chapterMenu: some View {
+        Menu {
+            ForEach(viewModel.chapters) { chapter in
+                Button {
+                    viewModel.seek(to: chapter.start)
+                } label: {
+                    Text("\(Fmt.duration(Int(chapter.start)))  \(chapter.title)")
+                }
+            }
+        } label: {
+            Text("章节 · \(viewModel.currentChapter?.title ?? "选择")")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.9))
+                .lineLimit(1)
+                .fixedSize()
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("视频章节")
+    }
+
+    /// 进度条上的章节分隔标记。
+    private var chapterMarks: some View {
+        GeometryReader { proxy in
+            let total = max(viewModel.duration, 1)
+            ForEach(viewModel.chapters) { chapter in
+                Rectangle()
+                    .fill(.white.opacity(0.9))
+                    .frame(width: 1.5, height: 5)
+                    .position(x: proxy.size.width * min(1, max(0, chapter.start / total)),
+                              y: proxy.size.height / 2)
+            }
+        }
+        .allowsHitTesting(false)
     }
 
     private func qualityMenu<Label: View>(@ViewBuilder label: () -> Label) -> some View {

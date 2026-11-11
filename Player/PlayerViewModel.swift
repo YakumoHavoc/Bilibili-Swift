@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import AppKit
+import CoreImage
 
 enum PlaybackMode: Equatable {
     case video(identifier: String)
@@ -103,6 +104,9 @@ final class PlayerViewModel: ObservableObject {
     /// 播放页右侧的相关视频推荐。
     @Published var relatedVideos: [VideoCard] = []
     @Published var isLoadingRelated = false
+
+    /// 视频章节（分段），为空时播放页不显示章节菜单。
+    @Published var chapters: [VideoChapter] = []
     /// 互动数据与当前账号的互动状态。
     @Published var likeCount = 0
     @Published var coinCount = 0
@@ -136,6 +140,10 @@ final class PlayerViewModel: ObservableObject {
     let mode: PlaybackMode
     /// 每个播放窗口独立的录制标识，多个直播窗口可各自录制互不影响。
     let recordingOwner = UUID()
+
+    /// 截图用：读取当前播放项的已解码帧（视频与直播都适用）。
+    private var snapshotOutput: AVPlayerItemVideoOutput?
+    private static let snapshotContext = CIContext(options: nil)
 
     private var cid: Int?
     private var aid: Int?
@@ -238,6 +246,7 @@ final class PlayerViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         upLocation = ""
+        chapters = []
 
         do {
             switch mode {
@@ -309,6 +318,7 @@ final class PlayerViewModel: ObservableObject {
         startAuxiliaryLoading(cid: cid)
         Task { @MainActor [weak self] in await self?.loadRelation() }
         Task { @MainActor [weak self] in await self?.loadRelated() }
+        Task { @MainActor [weak self] in await self?.loadChapters() }
 
         try await refreshPlayURL()
     }
@@ -374,7 +384,7 @@ final class PlayerViewModel: ObservableObject {
             // 直播分段为 4 秒，缓冲过小会一直卡在首帧；保持自动防卡顿并缓冲 2 秒。
             item.preferredForwardBufferDuration = 2
             player.automaticallyWaitsToMinimizeStalling = true
-            player.replaceCurrentItem(with: item)
+            setCurrentItem(item)
             startPlayback()
             isPlaying = true
             // 进入直播间后上报一次，写入直播观看记录（登录后生效）。
@@ -409,7 +419,7 @@ final class PlayerViewModel: ObservableObject {
             currentLiveURL = url
             let item = AVPlayerItem(asset: AVURLAsset(url: url, options: assetOptions()))
             item.preferredForwardBufferDuration = 2
-            player.replaceCurrentItem(with: item)
+            setCurrentItem(item)
             startPlayback()
             isPlaying = true
         } catch {
@@ -467,7 +477,7 @@ final class PlayerViewModel: ObservableObject {
         let asset = AVURLAsset(url: recording.mediaURL)
         let item = AVPlayerItem(asset: asset)
         item.preferredForwardBufferDuration = 2
-        player.replaceCurrentItem(with: item)
+        setCurrentItem(item)
         if let length = try? await asset.load(.duration),
            length.seconds.isFinite, length.seconds > 0 {
             duration = length.seconds
@@ -719,7 +729,7 @@ final class PlayerViewModel: ObservableObject {
     private func replaceItem(_ item: AVPlayerItem, duration: Double?) {
         // 缓冲 2 秒即可开播，避免等待过久。
         item.preferredForwardBufferDuration = 2
-        player.replaceCurrentItem(with: item)
+        setCurrentItem(item)
         if let duration, duration.isFinite, duration > 0 {
             self.duration = duration
         } else {
@@ -928,6 +938,74 @@ final class PlayerViewModel: ObservableObject {
         }
     }
 
+    /// 当前播放位置所属的章节。
+    var currentChapter: VideoChapter? {
+        chapters.last { $0.start <= currentTime }
+    }
+
+    // MARK: - 截图
+
+    /// 替换播放项，并挂上用于截图的视频输出。
+    private func setCurrentItem(_ item: AVPlayerItem) {
+        let output = AVPlayerItemVideoOutput(pixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA)
+        ])
+        item.add(output)
+        snapshotOutput = output
+        player.replaceCurrentItem(with: item)
+    }
+
+    /// 截取当前画面，保存到「图片/哔哩哔哩截图」，返回文件地址（失败返回 nil）。
+    func captureSnapshot() async -> URL? {
+        // 刚起播或刚切换清晰度时可能还没有解码帧，短暂重试几次。
+        for _ in 0..<8 {
+            if let output = snapshotOutput,
+               let buffer = output.copyPixelBuffer(forItemTime: player.currentTime(),
+                                                   itemTimeForDisplay: nil),
+               let url = saveSnapshot(buffer) {
+                return url
+            }
+            try? await Task.sleep(nanoseconds: 120_000_000)
+        }
+        return nil
+    }
+
+    private func saveSnapshot(_ buffer: CVPixelBuffer) -> URL? {
+        let ciImage = CIImage(cvPixelBuffer: buffer)
+        guard let cgImage = Self.snapshotContext.createCGImage(ciImage, from: ciImage.extent) else {
+            return nil
+        }
+        let rep = NSBitmapImageRep(cgImage: cgImage)
+        guard let data = rep.representation(using: .png, properties: [:]) else { return nil }
+        let directory = Self.snapshotDirectory(for: title)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd_HHmmss"
+        let url = directory.appendingPathComponent("截图_\(formatter.string(from: Date())).png")
+        do {
+            try data.write(to: url)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
+    /// 截图目录：下载/哔哩哔哩/截图/<视频或直播名称>，同一下载目录便于统一查看。
+    private static func snapshotDirectory(for title: String) -> URL {
+        let base = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser
+        var name = title
+            .components(separatedBy: CharacterSet(charactersIn: "/\\:?*\"<>|\n\r\t"))
+            .joined(separator: "_")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty { name = "未命名" }
+        if name.count > 60 { name = String(name.prefix(60)) }
+        return base
+            .appendingPathComponent("哔哩哔哩", isDirectory: true)
+            .appendingPathComponent("截图", isDirectory: true)
+            .appendingPathComponent(name, isDirectory: true)
+    }
+
     func setRate(_ rate: Double) {
         playbackRate = rate
         player.defaultRate = Float(rate)
@@ -1012,6 +1090,14 @@ final class PlayerViewModel: ObservableObject {
         defer { isLoadingRelated = false }
         guard let list = try? await BiliAPI.relatedVideos(bvid: bvid), self.bvid == bvid else { return }
         relatedVideos = list
+    }
+
+    /// 视频章节（分段），没有章节时保持为空。
+    private func loadChapters() async {
+        guard let aid, let cid else { return }
+        let list = (try? await BiliAPI.videoChapters(aid: aid, cid: cid)) ?? []
+        guard self.cid == cid else { return }
+        chapters = list
     }
 
     /// 当前播放视频的 aid 与标识，供播放页的推荐反馈使用。

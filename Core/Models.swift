@@ -195,6 +195,27 @@ struct VideoDetailData: Decodable {
     let ugc_season: UgcSeason?
 }
 
+// MARK: - 视频章节（view_points）
+
+struct ViewPoint: Decodable {
+    let from: Double?
+    let to: Double?
+    let content: String?
+}
+
+/// 播放器信息接口，只取其中的章节字段。
+struct PlayerInfoData: Decodable {
+    let view_points: [ViewPoint]?
+}
+
+/// 供播放页使用的章节模型。
+struct VideoChapter: Identifiable, Hashable {
+    let id: Int
+    let start: Double
+    let end: Double
+    let title: String
+}
+
 // MARK: - 合集（ugc_season）
 
 struct UgcSeason: Decodable {

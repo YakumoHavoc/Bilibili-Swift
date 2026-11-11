@@ -43,6 +43,9 @@ struct DynamicView: View {
     @State private var commentTarget: DynamicItem?
     @State private var imageViewer: ImageViewerPayload?
     @State private var forwardTarget: DynamicDetailTarget?
+    /// 关注头像横滑区域的位置与翻页索引。
+    @State private var avatarMetrics = AvatarScrollMetrics()
+    @State private var avatarAnchor = 0
 
     var body: some View {
         Group {
@@ -235,6 +238,23 @@ struct DynamicView: View {
     }
 
     private var avatarRow: some View {
+        ScrollViewReader { proxy in
+            avatarStrip()
+                .overlay(alignment: .leading) {
+                    if avatarCanScrollLeft {
+                        scrollArrow(direction: -1, edge: .leading, proxy: proxy)
+                    }
+                }
+                .overlay(alignment: .trailing) {
+                    if avatarCanScrollRight {
+                        scrollArrow(direction: 1, edge: .trailing, proxy: proxy)
+                    }
+                }
+        }
+    }
+
+    /// 横向头像栏，并为每个头像设置 id 以便按钮翻页定位。
+    private func avatarStrip() -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 14) {
                 Button {
@@ -267,8 +287,9 @@ struct DynamicView: View {
                 }
                 .buttonStyle(.plain)
                 .help("回到全部动态")
+                .id(0)
 
-                ForEach(followings) { user in
+                ForEach(Array(followings.enumerated()), id: \.element.id) { index, user in
                     Button {
                         selectAuthor(user)
                     } label: {
@@ -296,11 +317,59 @@ struct DynamicView: View {
                     }
                     .buttonStyle(.plain)
                     .help(updatedMids.contains(user.id) ? "\(user.name) 有新动态" : user.name)
+                    .id(index + 1)
                 }
             }
             .padding(.vertical, 14)
             .padding(.horizontal, 2)
         }
+        .modifier(AvatarScrollMetricsModifier(metrics: $avatarMetrics))
+    }
+
+    /// 头像栏左右翻页按钮，点击一次翻动约 4 个头像。
+    private func scrollArrow(direction: CGFloat, edge: HorizontalEdge,
+                             proxy: ScrollViewProxy) -> some View {
+        Button {
+            let currentIndex = avatarMetrics.offset > 0
+                ? Int((avatarMetrics.offset / avatarItemWidth).rounded())
+                : avatarAnchor
+            let target = min(max(0, currentIndex + Int(direction) * 4), followings.count)
+            avatarAnchor = target
+            withAnimation(.easeInOut(duration: 0.22)) {
+                proxy.scrollTo(target, anchor: .leading)
+            }
+        } label: {
+            Image(systemName: direction < 0 ? "chevron.left" : "chevron.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Palette.text2)
+                .frame(width: 26, height: 26)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay(Circle().stroke(Palette.line, lineWidth: 0.8))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(direction < 0 ? "向左查看已关注的 UP 主" : "查看更多 UP 主的更新")
+        .background(alignment: edge == .leading ? .leading : .trailing) {
+            LinearGradient(colors: [Palette.bg, Palette.bg.opacity(0)],
+                           startPoint: edge == .leading ? .leading : .trailing,
+                           endPoint: edge == .leading ? .trailing : .leading)
+                .frame(width: 52)
+                .allowsHitTesting(false)
+        }
+    }
+
+    /// 头像宽度 64 加间距 14，用于把横向偏移换算成索引。
+    private var avatarItemWidth: CGFloat { 78 }
+
+    private var avatarCanScrollLeft: Bool {
+        // 留出少量容差：起点处的 2pt 内边距不应让左箭头常驻。
+        if #available(macOS 15.0, *) { return avatarMetrics.offset > 8 }
+        return avatarAnchor > 0
+    }
+
+    private var avatarCanScrollRight: Bool {
+        if #available(macOS 15.0, *) { return avatarMetrics.offset < avatarMetrics.maxOffset - 8 }
+        return avatarAnchor < followings.count
     }
 
     private func authorHeader(_ author: FollowingUser) -> some View {
@@ -1474,5 +1543,34 @@ struct ImageViewerSheet: View {
             .frame(width: 34, height: 34)
             .background(Color.white.opacity(0.14))
             .clipShape(Circle())
+    }
+}
+
+// MARK: - 关注头像横滑
+
+/// 头像栏横向滚动的偏移量，用于决定左右按钮是否显示。
+struct AvatarScrollMetrics: Equatable {
+    var offset: CGFloat = 0
+    var maxOffset: CGFloat = 0
+}
+
+/// 读取头像栏的横向滚动几何信息，用来判断还能否继续左右翻页。
+struct AvatarScrollMetricsModifier: ViewModifier {
+    @Binding var metrics: AvatarScrollMetrics
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.onScrollGeometryChange(for: AvatarScrollMetrics.self) { geometry in
+                AvatarScrollMetrics(
+                    offset: geometry.contentOffset.x,
+                    maxOffset: max(0, geometry.contentSize.width - geometry.containerSize.width)
+                )
+            } action: { _, newValue in
+                metrics = newValue
+            }
+        } else {
+            content
+        }
     }
 }

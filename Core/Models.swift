@@ -390,6 +390,26 @@ struct LiveHistoryDanmaku: Decodable {
     let uid: Int?
 }
 
+/// 粉丝勋章墙：每项外层是包裹，`medal_info` 才是勋章本身。
+struct LiveMedalWallData: Decodable {
+    let list: [LiveMedalItem]?
+}
+
+struct LiveMedalItem: Decodable {
+    let medal_info: LiveMedal?
+}
+
+struct LiveMedal: Decodable, Identifiable {
+    let medal_id: Int?
+    let medal_name: String?
+    let level: Int?
+    let target_id: Int?
+    let target_name: String?
+    /// 是否正在佩戴：1 佩戴中、0 未佩戴。
+    let wearing_status: Int?
+    var id: Int { medal_id ?? 0 }
+}
+
 struct LivePlayURLInfo: Decodable {
     let playurl: LivePlayURL?
 }

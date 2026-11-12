@@ -104,14 +104,14 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
     }
 
     func openLive(room: LiveRoom, app: AppState) {
-        present(mode: .live(roomID: room.id), title: room.title, app: app)
+        present(mode: .live(roomID: room.id), title: room.title, cover: room.cover, app: app)
     }
 
     func openRecording(_ recording: LiveRecording, app: AppState) {
         present(mode: .recording(recording), title: recording.title, app: app)
     }
 
-    private func present(mode: PlaybackMode, title: String, app: AppState) {
+    private func present(mode: PlaybackMode, title: String, cover: String = "", app: AppState) {
         guard windows.count < Self.maxWindows else {
             app.showToast("最多同时播放 \(Self.maxWindows) 个窗口，请先关闭一个")
             return
@@ -120,7 +120,8 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
         let displayTitle = title.isEmpty ? "哔哩哔哩" : title
         let viewModel = PlayerViewModel(mode: mode,
                                         title: displayTitle,
-                                        quality: app.playQuality)
+                                        quality: app.playQuality,
+                                        cover: cover)
         let root = PlayerView(viewModel: viewModel)
             .environmentObject(app)
         let hosting = NSHostingView(rootView: root)

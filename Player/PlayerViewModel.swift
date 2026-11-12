@@ -121,6 +121,18 @@ final class PlayerViewModel: ObservableObject {
     @Published var liveMessages: [LiveDanmakuMessage] = []
     @Published var comments: [Reply] = []
     @Published var repliesCount = 0
+    /// 评论排序：2 按热度、0 按时间。
+    @Published var commentSort = 2
+    /// 楼中楼：根评论 rpid → 该评论下的回复列表。
+    @Published var replyThreads: [Int: [Reply]] = [:]
+    /// 正在加载回复的根评论。
+    @Published var loadingThreads: Set<Int> = []
+    /// 正在发布评论 / 回复。
+    @Published var isPostingComment = false
+    /// 当前账号的粉丝勋章与已佩戴勋章。
+    @Published var liveMedals: [LiveMedal] = []
+    @Published var wornMedalID: Int?
+    @Published var isSendingDanmaku = false
     @Published var pages: [VideoPage] = []
     @Published var currentPageIndex = 0
     @Published var isLoadingComments = false
@@ -171,11 +183,15 @@ final class PlayerViewModel: ObservableObject {
     private var playGeneration = 0
     /// 定时上报观看进度到账号历史记录。
     private var historyTask: Task<Void, Never>?
+    /// 直播出现长时间缓冲时记录起点，用于换节点重连。
+    private var stallSince: Date?
+    private var lastLiveNodeSwitch: Date?
 
-    init(mode: PlaybackMode, title: String, quality: Int) {
+    init(mode: PlaybackMode, title: String, quality: Int, cover: String = "") {
         self.mode = mode
         self.title = title
         self.selectedQuality = quality
+        self.cover = cover
         player.automaticallyWaitsToMinimizeStalling = true
         player.volume = 1.0
 
@@ -224,6 +240,7 @@ final class PlayerViewModel: ObservableObject {
         timeControlObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
             Task { @MainActor [weak self] in
                 self?.updateSleepAssertion()
+                self?.handleLiveStatusChange()
             }
         }
     }
@@ -385,10 +402,15 @@ final class PlayerViewModel: ObservableObject {
             item.preferredForwardBufferDuration = 2
             player.automaticallyWaitsToMinimizeStalling = true
             setCurrentItem(item)
-            startPlayback()
+            // 直播不要等 readyToPlay 再播：AVPlayer 在 rate 为 0 时不会主动拉流，
+            // 白白黑屏几秒且流量很低。直接 play()，由播放器自己缓冲到首帧。
+            player.play()
+            liveFrameReady = false
             isPlaying = true
             // 进入直播间后上报一次，写入直播观看记录（登录后生效）。
             Task { await BiliAPI.reportLiveEntry(roomID: roomID) }
+            // 拉取粉丝勋章列表，供发送弹幕时切换佩戴。
+            Task { [weak self] in await self?.loadLiveMedals() }
         } catch {
             stop()
             throw error
@@ -420,10 +442,57 @@ final class PlayerViewModel: ObservableObject {
             let item = AVPlayerItem(asset: AVURLAsset(url: url, options: assetOptions()))
             item.preferredForwardBufferDuration = 2
             setCurrentItem(item)
-            startPlayback()
+            // 切画质同样立即开播，避免黑屏等待。
+            player.play()
+            liveFrameReady = false
             isPlaying = true
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - 直播录制
+
+    /// 直播卡顿兜底：长时间停在「缓冲中」说明当前节点带宽不足，换一条更快的节点重连。
+    private func handleLiveStatusChange() {
+        guard isLive, isPlaying else {
+            stallSince = nil
+            return
+        }
+        if player.timeControlStatus == .waitingToPlayAtSpecifiedRate {
+            guard stallSince == nil else { return }
+            stallSince = Date()
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                await self?.recoverStalledLive()
+            }
+        } else {
+            stallSince = nil
+        }
+    }
+
+    private func recoverStalledLive() async {
+        guard isLive, isPlaying, let roomID = liveRoomID,
+              let since = stallSince,
+              Date().timeIntervalSince(since) >= 4,
+              player.timeControlStatus == .waitingToPlayAtSpecifiedRate else { return }
+        stallSince = nil
+        // 换节点会短暂重新缓冲，短时间内不重复触发。
+        if let last = lastLiveNodeSwitch, Date().timeIntervalSince(last) < 15 { return }
+        lastLiveNodeSwitch = Date()
+
+        do {
+            let info = try await BiliAPI.livePlayInfo(roomID: roomID, qn: selectedQuality)
+            let candidates = BiliAPI.liveStreamCandidates(from: info)
+                .filter { $0.url != currentLiveURL?.absoluteString }
+            guard let url = await pickLiveStreamURL(candidates) else { return }
+            currentLiveURL = url
+            let item = AVPlayerItem(asset: AVURLAsset(url: url, options: assetOptions()))
+            item.preferredForwardBufferDuration = 2
+            setCurrentItem(item)
+            player.play()
+        } catch {
+            // 重连失败保持原状，等下一次缓冲超时再试。
         }
     }
 
@@ -523,10 +592,12 @@ final class PlayerViewModel: ObservableObject {
         guard let first = urls.first else { return nil }
         guard urls.count > 1 else { return first }
 
-        let target = referer
+        let referer = self.referer
         return await withCheckedContinuation { continuation in
             let lock = NSLock()
             var finished = false
+            var best: (url: URL, speed: Double)?
+            var pending = urls.count
 
             func finish(_ url: URL?) {
                 lock.lock()
@@ -539,31 +610,84 @@ final class PlayerViewModel: ObservableObject {
                 continuation.resume(returning: url)
             }
 
-            let config = URLSessionConfiguration.ephemeral
-            config.timeoutIntervalForRequest = 3
-            config.requestCachePolicy = .reloadIgnoringLocalCacheData
-            let session = URLSession(configuration: config)
+            func record(_ url: URL, speed: Double) {
+                lock.lock()
+                if best == nil || speed > best!.speed {
+                    best = (url, speed)
+                }
+                pending -= 1
+                let allDone = pending == 0
+                // 已达原画所需带宽就不再等其它节点，尽早开播。
+                let fastEnough = speed >= 1_000_000
+                let chosen = best?.url
+                lock.unlock()
+                if allDone || fastEnough { finish(chosen ?? first) }
+            }
 
             for url in urls {
                 Task.detached {
-                    var request = URLRequest(url: url)
-                    request.timeoutInterval = 3
-                    request.setValue(target, forHTTPHeaderField: "Referer")
-                    request.setValue(BiliClient.userAgent, forHTTPHeaderField: "User-Agent")
-                    request.setValue("https://live.bilibili.com", forHTTPHeaderField: "Origin")
-                    if let (_, response) = try? await session.data(for: request),
-                       let http = response as? HTTPURLResponse,
-                       (200..<300).contains(http.statusCode) {
-                        finish(url)
-                    }
+                    let speed = await Self.liveNodeSpeed(url: url, referer: referer)
+                    record(url, speed: speed ?? 0)
                 }
             }
 
+            // 超时未测完时用当前最快的节点，避免进入直播间等待过久。
             Task.detached {
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
-                finish(first)
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                lock.lock()
+                let chosen = best?.url ?? first
+                lock.unlock()
+                finish(chosen)
             }
         }
+    }
+
+    /// 节点测速：读取 playlist 后试拉首个分段的 256KB，用耗时估算吞吐。
+    /// 只探测连通性容易选中「能连但很慢」的节点，高码率画质会因此频繁卡顿。
+    private nonisolated static func liveNodeSpeed(url: URL, referer: String) async -> Double? {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 3
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        let session = URLSession(configuration: config)
+
+        func authorize(_ request: inout URLRequest) {
+            request.timeoutInterval = 3
+            request.setValue(referer, forHTTPHeaderField: "Referer")
+            request.setValue(BiliClient.userAgent, forHTTPHeaderField: "User-Agent")
+            request.setValue("https://live.bilibili.com", forHTTPHeaderField: "Origin")
+        }
+
+        var playlistRequest = URLRequest(url: url)
+        authorize(&playlistRequest)
+        guard let (data, response) = try? await session.data(for: playlistRequest),
+              let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode),
+              let text = String(data: data, encoding: .utf8) else { return nil }
+
+        let segmentLine = text.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty && !$0.hasPrefix("#") }
+        guard let line = segmentLine,
+              let segment = URL(string: line, relativeTo: url) else { return 0.001 }
+
+        var segmentRequest = URLRequest(url: segment)
+        authorize(&segmentRequest)
+        let start = Date()
+        var bytes = 0
+        do {
+            let (stream, response) = try await session.bytes(for: segmentRequest)
+            guard let http = response as? HTTPURLResponse,
+                  (200..<300).contains(http.statusCode) else { return nil }
+            // CDN 会忽略 Range 直接返回整段，只读到 256KB 就断开，够判断速度又不拖延开播。
+            for try await _ in stream {
+                bytes += 1
+                if bytes >= 262_144 { break }
+            }
+        } catch {
+            guard bytes > 0 else { return nil }
+        }
+        let elapsed = max(0.05, Date().timeIntervalSince(start))
+        return Double(bytes) / elapsed
     }
 
     // MARK: - 播放地址
@@ -1257,10 +1381,17 @@ final class PlayerViewModel: ObservableObject {
         guard let aid else { return }
         isLoadingComments = true
         defer { isLoadingComments = false }
-        guard let data = try? await BiliAPI.replies(aid: aid) else { return }
+        guard let data = try? await BiliAPI.replies(aid: aid, sort: commentSort) else { return }
         comments = data.replies ?? []
         repliesCount = data.page?.count ?? 0
         await resolveUpLocation(comments: data.replies ?? [], pinned: data.upper?.top)
+    }
+
+    /// 切换评论排序并重新加载。
+    func setCommentSort(_ sort: Int) async {
+        guard commentSort != sort else { return }
+        commentSort = sort
+        await loadComments()
     }
 
     /// UP 主的 IP 属地：优先取本人（含置顶）评论的属地，没有再退回空间页的所在地。
@@ -1273,6 +1404,215 @@ final class PlayerViewModel: ObservableObject {
         }
         if let place = await BiliAPI.spacePlace(mid: upMid) {
             upLocation = "所在地：\(place)"
+        }
+    }
+
+    // MARK: - 评论互动
+
+    /// 当前登录账号的 mid，用于判断评论是否由自己发布。
+    var myMid: Int {
+        Int(BiliClient.shared.cookieValue("DedeUserID") ?? "") ?? 0
+    }
+
+    func isMine(_ reply: Reply) -> Bool {
+        guard myMid > 0, let mid = Int(reply.member?.mid ?? "") else { return false }
+        return mid == myMid
+    }
+
+    /// 列表里是否已经有自己刚发布的那条评论。
+    private func hasComment(_ message: String) -> Bool {
+        comments.contains { isMine($0) && $0.content?.message == message }
+    }
+
+    /// 发表评论。返回错误提示，nil 表示成功。
+    func postComment(_ text: String) async -> String? {
+        guard let aid else { return "当前内容不支持评论" }
+        let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !message.isEmpty else { return "评论内容不能为空" }
+        isPostingComment = true
+        defer { isPostingComment = false }
+        do {
+            let code = try await BiliAPI.addReply(aid: aid, message: message)
+            guard code == 0 else { return Self.commentError(code) }
+            // 发布成功后按时间排序，保证自己的评论能立刻出现在列表顶部。
+            commentSort = 0
+            await loadComments()
+            // 服务端索引有延迟，短时间内重试直到自己的评论出现。
+            var attempts = 0
+            while !hasComment(message), attempts < 3 {
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                await loadComments()
+                attempts += 1
+            }
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    /// 回复某条评论（可以是对楼中楼里某条回复的回复）。返回错误提示，nil 表示成功。
+    func reply(to target: Reply, text: String) async -> String? {
+        guard let aid, let targetRpid = target.rpid else { return "当前内容不支持回复" }
+        let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !message.isEmpty else { return "回复内容不能为空" }
+        // 顶层评论的 root 为 0，此时根评论就是它自己。
+        let root = target.root.flatMap { $0 > 0 ? $0 : nil } ?? targetRpid
+        isPostingComment = true
+        defer { isPostingComment = false }
+        do {
+            let code = try await BiliAPI.addReply(aid: aid, message: message,
+                                                  root: root, parent: targetRpid)
+            guard code == 0 else { return Self.commentError(code) }
+            await loadReplies(root: root)
+            // 服务端索引有延迟，短时间内重试直到自己的回复出现。
+            var attempts = 0
+            while !(replyThreads[root]?.contains { isMine($0) && $0.content?.message == message } ?? false),
+                  attempts < 3 {
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                await loadReplies(root: root)
+                attempts += 1
+            }
+            if let index = comments.firstIndex(where: { $0.rpid == root }) {
+                comments[index].rcount = (comments[index].rcount ?? 0) + 1
+            }
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    /// 点赞 / 取消点赞。先本地更新，失败时回滚。返回错误提示，nil 表示成功。
+    func toggleLike(_ reply: Reply) async -> String? {
+        guard let aid, let rpid = reply.rpid else { return nil }
+        let wasLiked = reply.isLiked
+        applyLike(rpid: rpid, liked: !wasLiked)
+        do {
+            let code = try await BiliAPI.likeReply(aid: aid, rpid: rpid, liked: wasLiked)
+            guard code == 0 else {
+                applyLike(rpid: rpid, liked: wasLiked)
+                return Self.commentError(code)
+            }
+            return nil
+        } catch {
+            applyLike(rpid: rpid, liked: wasLiked)
+            return error.localizedDescription
+        }
+    }
+
+    private func applyLike(rpid: Int, liked: Bool) {
+        for index in comments.indices where comments[index].rpid == rpid {
+            let before = comments[index].isLiked
+            comments[index].action = liked ? 1 : 0
+            guard before != liked else { continue }
+            comments[index].like = max(0, (comments[index].like ?? 0) + (liked ? 1 : -1))
+        }
+        for root in replyThreads.keys {
+            guard var list = replyThreads[root],
+                  let index = list.firstIndex(where: { $0.rpid == rpid }) else { continue }
+            let before = list[index].isLiked
+            list[index].action = liked ? 1 : 0
+            if before != liked {
+                list[index].like = max(0, (list[index].like ?? 0) + (liked ? 1 : -1))
+            }
+            replyThreads[root] = list
+        }
+    }
+
+    /// 拉取某条评论下的回复（楼中楼）。
+    func loadReplies(root: Int) async {
+        guard let aid, !loadingThreads.contains(root) else { return }
+        loadingThreads.insert(root)
+        defer { loadingThreads.remove(root) }
+        guard let data = try? await BiliAPI.replyReplies(aid: aid, root: root) else { return }
+        replyThreads[root] = data.replies ?? []
+    }
+
+    /// 删除自己的评论或回复。`root` 为所属根评论（顶层评论传 nil）。返回错误提示，nil 表示成功。
+    func delete(_ reply: Reply, root: Int?) async -> String? {
+        guard let aid, let rpid = reply.rpid else { return "无法删除该评论" }
+        do {
+            let code = try await BiliAPI.deleteReply(aid: aid, rpid: rpid)
+            guard code == 0 else { return Self.commentError(code) }
+            if let root, root != rpid {
+                replyThreads[root]?.removeAll { $0.rpid == rpid }
+                if let index = comments.firstIndex(where: { $0.rpid == root }) {
+                    comments[index].rcount = max(0, (comments[index].rcount ?? 1) - 1)
+                }
+            } else {
+                comments.removeAll { $0.rpid == rpid }
+                replyThreads[rpid] = nil
+            }
+            repliesCount = max(0, repliesCount - 1)
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    private static func commentError(_ code: Int) -> String {
+        switch code {
+        case -101: return "请先登录后再操作"
+        case -111, -412: return "触发了风控校验，请稍后再试"
+        case -400: return "请求参数有误"
+        case 12002: return "评论内容过短"
+        case 12009: return "该内容已关闭评论区"
+        case 12051: return "操作太频繁，请稍后再试"
+        case 12061: return "评论被系统拦截，请修改后重试"
+        case 12064: return "不能只发送标点符号"
+        default: return "操作失败（\(code)）"
+        }
+    }
+
+    // MARK: - 直播间互动
+
+    /// 发送直播弹幕。返回错误提示，nil 表示成功。
+    func sendLiveDanmaku(_ text: String) async -> String? {
+        guard let roomID = liveRoomID else { return "当前不在直播间" }
+        guard BiliClient.shared.isLoggedIn else { return "请先登录后再发送弹幕" }
+        let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !message.isEmpty else { return "弹幕内容不能为空" }
+        guard message.count <= 20 else { return "弹幕最多 20 个字" }
+        isSendingDanmaku = true
+        defer { isSendingDanmaku = false }
+        do {
+            let code = try await BiliAPI.sendLiveDanmaku(roomID: roomID, message: message)
+            guard code == 0 else { return Self.liveError(code) }
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    /// 加载当前账号的粉丝勋章（用于发送弹幕时切换佩戴）。
+    func loadLiveMedals() async {
+        guard BiliClient.shared.isLoggedIn else { return }
+        guard let medals = try? await BiliAPI.liveMedals() else { return }
+        liveMedals = medals
+        // 用勋章墙里的佩戴状态初始化，避免显示成未佩戴。
+        wornMedalID = medals.first { ($0.wearing_status ?? 0) == 1 }?.id
+    }
+
+    /// 佩戴 / 摘下粉丝勋章，`medalID` 为 0 表示摘下。返回错误提示，nil 表示成功。
+    func wearLiveMedal(_ medalID: Int) async -> String? {
+        do {
+            let code = try await BiliAPI.wearLiveMedal(medalID: medalID)
+            guard code == 0 else { return Self.liveError(code) }
+            wornMedalID = medalID == 0 ? nil : medalID
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    private static func liveError(_ code: Int) -> String {
+        switch code {
+        case -101: return "请先登录后再操作"
+        case -111, -412: return "触发了风控校验，请稍后再试"
+        case -400: return "请求参数有误"
+        case 1003212: return "弹幕内容过长"
+        case 10030: return "该直播间已关闭弹幕"
+        case 10031: return "发送太频繁，请稍后再试"
+        default: return "操作失败（\(code)）"
         }
     }
 }

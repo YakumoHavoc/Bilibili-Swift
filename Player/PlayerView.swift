@@ -17,6 +17,15 @@ struct PlayerView: View {
     @State private var detailScrollOffset: CGFloat = 0
     /// 点「返回顶部」时自增，触发详情区回到顶部。
     @State private var scrollToTopToken = 0
+    /// 评论 / 回复输入框内容。
+    @State private var commentDraft = ""
+    /// 正在回复的评论 rpid，nil 表示未展开回复框。
+    @State private var replyTargetID: Int?
+    @State private var replyDraft = ""
+    /// 已展开楼中楼的根评论 rpid。
+    @State private var expandedThreads: Set<Int> = []
+    /// 直播弹幕输入框。
+    @State private var danmakuDraft = ""
 
     /// 滚过这段距离后播放区域完全收起。
     private static let collapseDistance: CGFloat = 360
@@ -136,6 +145,15 @@ struct PlayerView: View {
     private func playerArea(collapse: CGFloat) -> some View {
         ZStack {
             Color.black
+
+            // 直播间起播需要拉流与解码，先用封面占位，避免这几秒纯黑屏。
+            if viewModel.isLive, !viewModel.liveFrameReady, !viewModel.cover.isEmpty {
+                RemoteImage(url: viewModel.cover, contentMode: .fill)
+                    .overlay(Color.black.opacity(0.5))
+                    .blur(radius: 3)
+                    .clipped()
+                    .allowsHitTesting(false)
+            }
 
             VideoSurface(player: viewModel.player)
 
@@ -624,9 +642,116 @@ struct PlayerView: View {
                     }
                 }
             }
+
+            if !viewModel.isRecordingPlayback, BiliClient.shared.isLoggedIn {
+                Rectangle()
+                    .fill(Palette.line)
+                    .frame(height: 1)
+                danmakuComposer
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Palette.bg)
+    }
+
+    /// 直播弹幕输入区，右侧可切换佩戴的粉丝勋章。
+    private var danmakuComposer: some View {
+        HStack(spacing: 8) {
+            TextField("发送弹幕…", text: $danmakuDraft)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(Palette.text1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(Palette.bgThin)
+                .clipShape(Capsule())
+                .onSubmit { submitDanmaku() }
+
+            medalButton
+
+            Button {
+                submitDanmaku()
+            } label: {
+                Text(viewModel.isSendingDanmaku ? "发送中" : "发送")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 6)
+                    .background(canSendDanmaku ? Palette.pink : Palette.text3.opacity(0.4))
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSendDanmaku)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+    }
+
+    private var canSendDanmaku: Bool {
+        !viewModel.isSendingDanmaku
+            && !danmakuDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// 粉丝勋章切换菜单：点击即佩戴，也可摘下。
+    private var medalButton: some View {
+        Menu {
+            if viewModel.liveMedals.isEmpty {
+                Text("暂无粉丝勋章")
+            } else {
+                ForEach(viewModel.liveMedals) { medal in
+                    Button {
+                        wearMedal(medal.id)
+                    } label: {
+                        Text("\(viewModel.wornMedalID == medal.id ? "✓ " : "")\(medal.medal_name ?? "勋章") Lv\(medal.level ?? 0)")
+                    }
+                }
+                Divider()
+                Button("摘下勋章") { wearMedal(0) }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: "medal")
+                Text(wornMedalTitle)
+            }
+            .font(.system(size: 11))
+            .foregroundStyle(viewModel.wornMedalID == nil ? Palette.text3 : Palette.pink)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(Palette.bgThin)
+            .clipShape(Capsule())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    private var wornMedalTitle: String {
+        guard let id = viewModel.wornMedalID else { return "勋章" }
+        return viewModel.liveMedals.first { $0.id == id }?.medal_name ?? "勋章"
+    }
+
+    private func submitDanmaku() {
+        let text = danmakuDraft
+        guard canSendDanmaku else { return }
+        Task {
+            if let error = await viewModel.sendLiveDanmaku(text) {
+                app.showToast(error)
+            } else {
+                danmakuDraft = ""
+            }
+        }
+    }
+
+    private func wearMedal(_ medalID: Int) {
+        Task {
+            if let error = await viewModel.wearLiveMedal(medalID) {
+                app.showToast(error)
+            } else if medalID == 0 {
+                app.showToast("已摘下粉丝勋章")
+            } else {
+                app.showToast("已佩戴粉丝勋章")
+            }
+        }
     }
 
     private var danmakuStatusColor: Color {
@@ -1159,57 +1284,289 @@ struct PlayerView: View {
 
     @ViewBuilder
     private var commentsSection: some View {
-        HStack(spacing: 8) {
-            Text("评论")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Palette.text1)
-            Text(Fmt.count(viewModel.repliesCount))
-                .font(.system(size: 11))
-                .foregroundStyle(Palette.text3)
-            if viewModel.isLoadingComments {
-                ProgressView().controlSize(.mini)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Text("评论")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Palette.text1)
+                Text(Fmt.count(viewModel.repliesCount))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.text3)
+                if viewModel.isLoadingComments {
+                    ProgressView().controlSize(.mini)
+                }
+                Spacer()
+                sortChip("最热", sort: 2)
+                sortChip("最新", sort: 0)
+            }
+
+            if BiliClient.shared.isLoggedIn {
+                commentComposer
+            }
+
+            if viewModel.comments.isEmpty {
+                Text(viewModel.isLoadingComments ? "正在加载评论…" : "暂无评论")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.text3)
+                    .padding(.vertical, 16)
+            } else {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    ForEach(viewModel.comments) { reply in
+                        commentRow(reply, root: reply.rpid, isChild: false)
+                    }
+                }
             }
         }
+    }
 
-        if viewModel.comments.isEmpty {
-            Text(viewModel.isLoadingComments ? "正在加载评论…" : "暂无评论")
-                .font(.system(size: 12))
-                .foregroundStyle(Palette.text3)
-                .padding(.vertical, 16)
-        } else {
-            LazyVStack(alignment: .leading, spacing: 16) {
-                ForEach(viewModel.comments) { reply in
-                    HStack(alignment: .top, spacing: 10) {
-                        AvatarView(url: ImageURL.thumb(reply.member?.avatar, width: 64, height: 64), size: 30)
-                        VStack(alignment: .leading, spacing: 5) {
-                            HStack(spacing: 8) {
-                                Text(reply.member?.uname ?? "")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(Palette.text2)
-                                Text(Fmt.relativeDate(reply.ctime ?? 0))
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(Palette.text3)
-                                if let location = reply.location {
-                                    Text(location)
-                                        .font(.system(size: 10))
-                                        .foregroundStyle(Palette.text3)
-                                }
+    /// 评论输入框：登录后可直接发表评论。
+    private var commentComposer: some View {
+        HStack(alignment: .top, spacing: 8) {
+            AvatarView(url: ImageURL.thumb(app.user?.face, width: 64, height: 64), size: 28)
+            VStack(alignment: .leading, spacing: 6) {
+                TextField("发一条友善的评论", text: $commentDraft, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.text1)
+                    .lineLimit(1...4)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(Palette.bgThin)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                HStack(spacing: 8) {
+                    Spacer()
+                    Button {
+                        submitComment()
+                    } label: {
+                        Text(viewModel.isPostingComment ? "发布中…" : "发布")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 5)
+                            .background(canSubmitComment ? Palette.pink : Palette.text3.opacity(0.4))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canSubmitComment)
+                }
+            }
+        }
+    }
+
+    private var canSubmitComment: Bool {
+        !viewModel.isPostingComment
+            && !commentDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// 评论排序切换按钮。
+    private func sortChip(_ title: String, sort: Int) -> some View {
+        Button {
+            Task { await viewModel.setCommentSort(sort) }
+        } label: {
+            Text(title)
+                .font(.system(size: 11, weight: viewModel.commentSort == sort ? .semibold : .regular))
+                .foregroundStyle(viewModel.commentSort == sort ? Palette.text1 : Palette.text3)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 单条评论 / 回复。`isChild` 为真时是楼中楼里的一层。
+    /// 楼中楼会递归渲染自身，用 AnyView 打断不透明返回类型的递归推导。
+    private func commentRow(_ reply: Reply, root: Int?, isChild: Bool) -> AnyView {
+        AnyView(HStack(alignment: .top, spacing: 10) {
+            AvatarView(url: ImageURL.thumb(reply.member?.avatar, width: 64, height: 64),
+                       size: isChild ? 22 : 30)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    Text(reply.member?.uname ?? "")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Palette.text2)
+                    Text(Fmt.relativeDate(reply.ctime ?? 0))
+                        .font(.system(size: 10))
+                        .foregroundStyle(Palette.text3)
+                    if let location = reply.location {
+                        Text(location)
+                            .font(.system(size: 10))
+                            .foregroundStyle(Palette.text3)
+                    }
+                    if !isChild, viewModel.isMine(reply) {
+                        Text("我")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(Palette.pink)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Palette.pink.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                    }
+                }
+                Text(reply.content?.message ?? "")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.text1)
+                    .lineSpacing(3)
+                    .textSelection(.enabled)
+
+                HStack(spacing: 14) {
+                    Button {
+                        Task {
+                            if let error = await viewModel.toggleLike(reply) {
+                                app.showToast(error)
                             }
-                            Text(reply.content?.message ?? "")
-                                .font(.system(size: 12))
-                                .foregroundStyle(Palette.text1)
-                                .lineSpacing(3)
-                                .textSelection(.enabled)
-                            HStack(spacing: 4) {
-                                Image(systemName: "hand.thumbsup")
-                                Text(Fmt.count(reply.like ?? 0))
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: reply.isLiked ? "hand.thumbsup.fill" : "hand.thumbsup")
+                            Text((reply.like ?? 0) > 0 ? Fmt.count(reply.like ?? 0) : "赞")
+                        }
+                        .font(.system(size: 10))
+                        .foregroundStyle(reply.isLiked ? Palette.pink : Palette.text3)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        replyTargetID = reply.rpid
+                        replyDraft = ""
+                    } label: {
+                        Text("回复")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Palette.text3)
+                    }
+                    .buttonStyle(.plain)
+
+                    if viewModel.isMine(reply) {
+                        Button {
+                            deleteComment(reply, root: root)
+                        } label: {
+                            Text("删除")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Palette.text3)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if !isChild, let count = reply.rcount, count > 0, let rootID = reply.rpid {
+                        Button {
+                            toggleThread(rootID)
+                        } label: {
+                            HStack(spacing: 3) {
+                                Text("\(count) 条回复")
+                                Image(systemName: expandedThreads.contains(rootID) ? "chevron.up" : "chevron.down")
                             }
                             .font(.system(size: 10))
                             .foregroundStyle(Palette.text3)
                         }
-                        Spacer()
+                        .buttonStyle(.plain)
                     }
                 }
+
+                if replyTargetID == reply.rpid {
+                    replyComposer(for: reply)
+                }
+
+                if !isChild, let rootID = reply.rpid, expandedThreads.contains(rootID) {
+                    threadReplies(rootID)
+                }
+            }
+            Spacer(minLength: 0)
+        })
+    }
+
+    /// 楼中楼里的内联回复输入框。
+    private func replyComposer(for reply: Reply) -> some View {
+        HStack(spacing: 6) {
+            TextField("回复 @\(reply.member?.uname ?? "")", text: $replyDraft)
+                .textFieldStyle(.plain)
+                .font(.system(size: 11))
+                .foregroundStyle(Palette.text1)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Palette.bgThin)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .onSubmit { submitReply(to: reply) }
+            Button {
+                submitReply(to: reply)
+            } label: {
+                Text(viewModel.isPostingComment ? "发送中…" : "发送")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(replyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                ? Palette.text3.opacity(0.4) : Palette.pink)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isPostingComment
+                      || replyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            Button {
+                replyTargetID = nil
+                replyDraft = ""
+            } label: {
+                Text("取消")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.text3)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.top, 2)
+    }
+
+    /// 展开后的回复列表。
+    private func threadReplies(_ root: Int) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if viewModel.loadingThreads.contains(root) {
+                ProgressView().controlSize(.mini)
+            }
+            ForEach(viewModel.replyThreads[root] ?? []) { child in
+                commentRow(child, root: root, isChild: true)
+            }
+        }
+        .padding(.leading, 6)
+        .padding(.top, 2)
+    }
+
+    private func submitComment() {
+        let text = commentDraft
+        Task {
+            if let error = await viewModel.postComment(text) {
+                app.showToast(error)
+            } else {
+                commentDraft = ""
+                app.showToast("评论已发布")
+            }
+        }
+    }
+
+    private func submitReply(to reply: Reply) {
+        let text = replyDraft
+        Task {
+            if let error = await viewModel.reply(to: reply, text: text) {
+                app.showToast(error)
+            } else {
+                replyDraft = ""
+                replyTargetID = nil
+                if let root = reply.root.flatMap({ $0 > 0 ? $0 : nil }) ?? reply.rpid {
+                    expandedThreads.insert(root)
+                }
+                app.showToast("回复已发布")
+            }
+        }
+    }
+
+    private func toggleThread(_ root: Int) {
+        if expandedThreads.contains(root) {
+            expandedThreads.remove(root)
+        } else {
+            expandedThreads.insert(root)
+            Task { await viewModel.loadReplies(root: root) }
+        }
+    }
+
+    private func deleteComment(_ reply: Reply, root: Int?) {
+        Task {
+            if let error = await viewModel.delete(reply, root: root) {
+                app.showToast(error)
+            } else {
+                app.showToast("已删除")
             }
         }
     }

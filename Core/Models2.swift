@@ -531,10 +531,20 @@ struct Reply: Decodable, Identifiable {
     let rpid: Int?
     let member: ReplyMember?
     let content: ReplyContent?
-    let like: Int?
+    var like: Int?
     let ctime: Int?
     let reply_control: ReplyControl?
+    /// 楼中楼的根评论 rpid（顶层评论为 0）。
+    let root: Int?
+    /// 被回复评论的 rpid。
+    let parent: Int?
+    /// 该评论下的回复数量。
+    var rcount: Int?
+    /// 当前账号的点赞状态：1 已点赞、0 未点赞。
+    var action: Int?
     var id: Int { rpid ?? 0 }
+
+    var isLiked: Bool { (action ?? 0) == 1 }
 
     /// 评论者的 IP 属地（登录后由接口返回，形如「IP属地：浙江」）。
     var location: String? {

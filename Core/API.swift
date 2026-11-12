@@ -604,13 +604,13 @@ enum BiliAPI {
 
     // MARK: - 评论
 
-    static func replies(aid: Int, page: Int = 1) async throws -> ReplyData {
+    static func replies(aid: Int, page: Int = 1, sort: Int = 2) async throws -> ReplyData {
         try await BiliClient.shared.get(
             "https://api.bilibili.com/x/v2/reply",
             params: [
                 "type": "1",
                 "oid": String(aid),
-                "sort": "2",
+                "sort": String(sort),
                 "ps": "20",
                 "pn": String(page)
             ],
@@ -634,6 +634,111 @@ enum BiliAPI {
                 "pn": String(page)
             ],
             referer: "https://t.bilibili.com/\(refererID)"
+        )
+    }
+
+    /// 发表评论；回复他人时传 `root`（根评论 rpid）与 `parent`（被回复的 rpid）。
+    static func addReply(aid: Int, message: String,
+                         root: Int? = nil, parent: Int? = nil) async throws -> Int {
+        var params: [String: String] = [
+            "oid": String(aid),
+            "type": "1",
+            "message": message,
+            "plat": "1",
+            "ordering": "heat"
+        ]
+        if let root { params["root"] = String(root) }
+        if let parent { params["parent"] = String(parent) }
+        return try await BiliClient.shared.postForm(
+            "https://api.bilibili.com/x/v2/reply/add",
+            params: params,
+            referer: "https://www.bilibili.com/video/av\(aid)"
+        )
+    }
+
+    /// 点赞 / 取消点赞评论。
+    static func likeReply(aid: Int, rpid: Int, liked: Bool) async throws -> Int {
+        try await BiliClient.shared.postForm(
+            "https://api.bilibili.com/x/v2/reply/action",
+            params: [
+                "oid": String(aid),
+                "type": "1",
+                "rpid": String(rpid),
+                // 传当前状态：已赞时 action=0 取消点赞，未赞时 action=1 点赞。
+                "action": liked ? "0" : "1"
+            ],
+            referer: "https://www.bilibili.com/video/av\(aid)"
+        )
+    }
+
+    /// 某条评论下的回复（楼中楼）。
+    static func replyReplies(aid: Int, root: Int, page: Int = 1) async throws -> ReplyData {
+        try await BiliClient.shared.get(
+            "https://api.bilibili.com/x/v2/reply/reply",
+            params: [
+                "oid": String(aid),
+                "type": "1",
+                "root": String(root),
+                "ps": "20",
+                "pn": String(page)
+            ],
+            referer: "https://www.bilibili.com/video/av\(aid)"
+        )
+    }
+
+    /// 删除自己的评论或回复。
+    static func deleteReply(aid: Int, rpid: Int) async throws -> Int {
+        try await BiliClient.shared.postForm(
+            "https://api.bilibili.com/x/v2/reply/del",
+            params: [
+                "oid": String(aid),
+                "type": "1",
+                "rpid": String(rpid)
+            ],
+            referer: "https://www.bilibili.com/video/av\(aid)"
+        )
+    }
+
+    // MARK: - 直播间互动
+
+    /// 发送直播弹幕。成功与否由返回的 code 判断（0 为成功）。
+    static func sendLiveDanmaku(roomID: Int, message: String) async throws -> Int {
+        let csrf = BiliClient.shared.cookieValue("bili_jct") ?? ""
+        return try await BiliClient.shared.postForm(
+            "https://api.live.bilibili.com/msg/send",
+            params: [
+                "bubble": "0",
+                "msg": message,
+                "color": "16777215",
+                "mode": "1",
+                "fontsize": "25",
+                "rnd": String(Int(Date().timeIntervalSince1970)),
+                "roomid": String(roomID),
+                "csrf_token": csrf,
+                "reply_mid": "0",
+                "statistics": "{\"appId\":100,\"platform\":5}"
+            ],
+            referer: "https://live.bilibili.com/\(roomID)"
+        )
+    }
+
+    /// 当前账号的粉丝勋章墙。
+    static func liveMedals() async throws -> [LiveMedal] {
+        let mid = BiliClient.shared.cookieValue("DedeUserID") ?? ""
+        let data: LiveMedalWallData = try await BiliClient.shared.get(
+            "https://api.live.bilibili.com/xlive/web-ucenter/user/MedalWall",
+            params: ["target_id": mid, "web_location": "333.1387"],
+            referer: "https://live.bilibili.com/"
+        )
+        return (data.list ?? []).compactMap { $0.medal_info }
+    }
+
+    /// 佩戴 / 摘下粉丝勋章（`medalID` 传 0 表示摘下）。
+    static func wearLiveMedal(medalID: Int) async throws -> Int {
+        try await BiliClient.shared.postForm(
+            "https://api.live.bilibili.com/xlive/web-room/v1/fansMedal/wear",
+            params: ["medal_id": String(medalID)],
+            referer: "https://live.bilibili.com/"
         )
     }
 

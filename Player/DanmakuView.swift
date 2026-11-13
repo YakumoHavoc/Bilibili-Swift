@@ -2,6 +2,21 @@ import SwiftUI
 import AppKit
 import AVFoundation
 
+/// 弹幕层：单独观察播放时钟，避免进度每 30ms 更新一次时带动整个播放页重绘。
+struct DanmakuLayer: View {
+    let items: [DanmakuLaneItem]
+    @ObservedObject var clock: PlaybackClock
+    let opacity: Double
+    let fontSize: Double
+
+    var body: some View {
+        DanmakuOverlay(items: items,
+                       time: clock.time,
+                       opacity: opacity,
+                       fontSize: fontSize)
+    }
+}
+
 struct DanmakuOverlay: View {
     let items: [DanmakuLaneItem]
     let time: Double
@@ -10,17 +25,19 @@ struct DanmakuOverlay: View {
 
     var body: some View {
         Canvas { context, size in
-            let baseFont = NSFont.systemFont(ofSize: fontSize, weight: .medium)
-            let attributes: [NSAttributedString.Key: Any] = [.font: baseFont]
             let laneHeight = fontSize + 7
             let topInset: CGFloat = 10
+            // 阴影对所有弹幕完全一致：整体加一次，避免逐条复制上下文并创建滤镜。
+            var shadowed = context
+            shadowed.addFilter(.shadow(color: .black.opacity(0.85), radius: 1.2, x: 0, y: 0))
 
-            for entry in items {
+            // 弹幕按时间升序排列，只遍历仍可能显示在屏幕上的那一段（通常几十条）。
+            for entry in items[Self.activeRange(in: items, at: time)] {
+                guard entry.item.time <= time else { break }
                 let elapsed = time - entry.item.time
-                guard elapsed >= 0 else { continue }
 
                 let text = entry.item.text
-                let width = (text as NSString).size(withAttributes: attributes).width
+                let width = DanmakuWidthCache.shared.width(of: text, fontSize: fontSize)
                 let color = Color(nsColor: entry.color).opacity(opacity)
 
                 switch entry.item.mode {
@@ -33,7 +50,7 @@ struct DanmakuOverlay: View {
                     } else {
                         y = size.height - 12 - CGFloat(entry.lane + 1) * laneHeight
                     }
-                    draw(text: text, color: color, in: context,
+                    draw(text: text, color: color, in: &shadowed,
                          at: CGPoint(x: x + width / 2, y: y + fontSize / 2))
                 default:
                     let stay = Self.stay(for: text.count)
@@ -42,7 +59,7 @@ struct DanmakuOverlay: View {
                     let x = size.width - (elapsed / stay) * travel
                     guard x + width > 0 else { continue }
                     let y = topInset + CGFloat(entry.lane) * laneHeight
-                    draw(text: text, color: color, in: context,
+                    draw(text: text, color: color, in: &shadowed,
                          at: CGPoint(x: x + width / 2, y: y + fontSize / 2))
                 }
             }
@@ -51,17 +68,51 @@ struct DanmakuOverlay: View {
     }
 
     private func draw(text: String, color: Color,
-                      in context: GraphicsContext, at point: CGPoint) {
-        var resolved = context
-        resolved.addFilter(.shadow(color: .black.opacity(0.85), radius: 1.2, x: 0, y: 0))
+                      in context: inout GraphicsContext, at point: CGPoint) {
         let label = Text(text)
             .font(.system(size: fontSize, weight: .medium))
             .foregroundColor(color)
-        resolved.draw(label, at: point, anchor: .center)
+        context.draw(label, at: point, anchor: .center)
+    }
+
+    /// 二分查找仍可能停留在屏幕上的第一条弹幕（最长停留 13 秒）。
+    private static func activeRange(in items: [DanmakuLaneItem], at time: Double) -> Range<Int> {
+        let threshold = time - 13
+        var low = 0
+        var high = items.count
+        while low < high {
+            let mid = (low + high) / 2
+            if items[mid].item.time < threshold {
+                low = mid + 1
+            } else {
+                high = mid
+            }
+        }
+        return low..<items.count
     }
 
     static func stay(for count: Int) -> Double {
         min(12.0, 7.0 + Double(count) * 0.12)
+    }
+}
+
+/// 弹幕文字宽度缓存：每帧对每条弹幕做一次排版测量开销很大，这里按「字号 + 文本」缓存。
+private final class DanmakuWidthCache {
+    static let shared = DanmakuWidthCache()
+
+    private var widths: [String: CGFloat] = [:]
+    private let lock = NSLock()
+
+    func width(of text: String, fontSize: Double) -> CGFloat {
+        let key = "\(fontSize)-\(text)"
+        lock.lock()
+        defer { lock.unlock() }
+        if let width = widths[key] { return width }
+        let width = (text as NSString).size(withAttributes: [
+            .font: NSFont.systemFont(ofSize: CGFloat(fontSize), weight: .medium)
+        ]).width
+        widths[key] = width
+        return width
     }
 }
 

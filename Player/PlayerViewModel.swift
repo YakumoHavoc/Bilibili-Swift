@@ -64,6 +64,13 @@ struct LiveDanmakuMessage: Identifiable {
     let color: NSColor
 }
 
+/// 独立的播放时钟：只有弹幕层与进度条观察它。
+/// 进度每 30ms 变化一次，放在 PlayerViewModel 上会让整个播放页（包括评论列表）反复重绘。
+@MainActor
+final class PlaybackClock: ObservableObject {
+    @Published var time: Double = 0
+}
+
 @MainActor
 final class PlayerViewModel: ObservableObject {
     @Published var title: String
@@ -83,11 +90,14 @@ final class PlayerViewModel: ObservableObject {
         }
     }
     @Published var isLive = false
-    @Published var currentTime: Double = 0 {
+    /// 当前播放进度。刻意不用 @Published：每 30ms 一次的变化会触发整个播放页重绘。
+    /// 需要跟随进度的界面（弹幕层、进度条）改为观察 `clock`。
+    var currentTime: Double = 0 {
         didSet {
             if isRecordingPlayback { syncReplayDanmaku() }
         }
     }
+    let clock = PlaybackClock()
     @Published var duration: Double = 0
     @Published var qualities: [QualityOption] = []
     @Published var selectedQuality: Int
@@ -213,14 +223,14 @@ final class PlayerViewModel: ObservableObject {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 if self.isLive {
-                    self.currentTime = Date().timeIntervalSince(self.liveStart)
+                    self.setCurrentTime(Date().timeIntervalSince(self.liveStart))
                     if !self.liveFrameReady, time.seconds.isFinite, time.seconds > 0.05 {
                         self.liveFrameReady = true
                     }
                 } else {
                     let seconds = time.seconds
                     if seconds.isFinite, !self.suppressSeekUpdate {
-                        self.currentTime = seconds
+                        self.setCurrentTime(seconds)
                     }
                 }
             }
@@ -397,7 +407,7 @@ final class PlayerViewModel: ObservableObject {
         isRecordingPlayback = false
         liveRoomID = roomID
         liveStart = Date()
-        currentTime = 0
+        setCurrentTime(0)
         danmakuItems = []
         liveMessages = []
         liveFrameReady = false
@@ -545,7 +555,7 @@ final class PlayerViewModel: ObservableObject {
         liveRoomID = nil
         title = recording.title
         duration = recording.duration
-        currentTime = 0
+        setCurrentTime(0)
         danmakuItems = []
         liveMessages = []
         replayDanmaku = []
@@ -876,9 +886,15 @@ final class PlayerViewModel: ObservableObject {
         dashLoaders = next
     }
 
+    /// 同步播放进度到独立时钟，供弹幕层与进度条观察。
+    private func setCurrentTime(_ value: Double) {
+        currentTime = value
+        clock.time = value
+    }
+
     private func replaceItem(_ item: AVPlayerItem, duration: Double?) {
-        // 缓冲 2 秒即可开播，避免等待过久。
-        item.preferredForwardBufferDuration = 2
+        // 点播缓冲 10 秒：足以覆盖高码率分片下载耗时，又不会拖慢起播。
+        item.preferredForwardBufferDuration = 10
         setCurrentItem(item)
         if let duration, duration.isFinite, duration > 0 {
             self.duration = duration
@@ -1125,7 +1141,7 @@ final class PlayerViewModel: ObservableObject {
 
     func seek(to seconds: Double) {
         let time = CMTime(seconds: max(0, seconds), preferredTimescale: 1000)
-        currentTime = seconds
+        setCurrentTime(seconds)
         suppressSeekUpdate = true
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
             Task { @MainActor in
@@ -1238,7 +1254,7 @@ final class PlayerViewModel: ObservableObject {
         guard pages.indices.contains(index), let pageCID = pages[index].cid else { return }
         currentPageIndex = index
         cid = pageCID
-        currentTime = 0
+        setCurrentTime(0)
         danmakuItems = []
         do {
             try await refreshPlayURL()
@@ -1251,7 +1267,7 @@ final class PlayerViewModel: ObservableObject {
     /// 切换到同合集中的其他视频。
     func playSeasonEpisode(_ episode: UgcEpisode) async {
         guard let target = episode.bvid, target != bvid else { return }
-        currentTime = 0
+        setCurrentTime(0)
         danmakuItems = []
         isLoading = true
         do {

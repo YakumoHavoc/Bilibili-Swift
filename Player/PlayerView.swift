@@ -8,8 +8,6 @@ struct PlayerView: View {
     @ObservedObject private var recorder = LiveRecorder.shared
 
     @State private var isHovering = false
-    @State private var isSeeking = false
-    @State private var sliderValue: Double = 0
     @State private var showFullDescription = false
     @State private var downloadNotice: String?
     /// 视频播放时是否隐藏下方详情，仅保留播放区域。
@@ -193,10 +191,10 @@ struct PlayerView: View {
             }
 
             if app.danmakuEnabled, !viewModel.danmakuItems.isEmpty {
-                DanmakuOverlay(items: viewModel.danmakuItems,
-                               time: viewModel.currentTime,
-                               opacity: app.danmakuOpacity,
-                               fontSize: app.danmakuFontSize)
+                DanmakuLayer(items: viewModel.danmakuItems,
+                             clock: viewModel.clock,
+                             opacity: app.danmakuOpacity,
+                             fontSize: app.danmakuFontSize)
             }
 
             // 滚动收起时，画面底部做磨砂淡出，与下方详情区的交界不再生硬。
@@ -347,27 +345,7 @@ struct PlayerView: View {
             .buttonStyle(.plain)
 
             if !viewModel.showsLiveChat {
-                Text(Fmt.duration(Int(viewModel.currentTime)))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .monospacedDigit()
-
-                Slider(value: Binding(get: {
-                    isSeeking ? sliderValue : min(viewModel.currentTime, max(viewModel.duration, 1))
-                }, set: { sliderValue = $0 }), in: 0...max(viewModel.duration, 1)) { editing in
-                    isSeeking = editing
-                    if !editing {
-                        viewModel.seek(to: sliderValue)
-                    }
-                }
-                .tint(Palette.pink)
-                .controlSize(.small)
-                .overlay { chapterMarks }
-
-                Text(Fmt.duration(Int(viewModel.duration)))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .monospacedDigit()
+                PlaybackProgressControls(viewModel: viewModel, clock: viewModel.clock)
 
                 if !viewModel.chapters.isEmpty {
                     chapterMenu
@@ -549,21 +527,6 @@ struct PlayerView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("视频章节")
-    }
-
-    /// 进度条上的章节分隔标记。
-    private var chapterMarks: some View {
-        GeometryReader { proxy in
-            let total = max(viewModel.duration, 1)
-            ForEach(viewModel.chapters) { chapter in
-                Rectangle()
-                    .fill(.white.opacity(0.9))
-                    .frame(width: 1.5, height: 5)
-                    .position(x: proxy.size.width * min(1, max(0, chapter.start / total)),
-                              y: proxy.size.height / 2)
-            }
-        }
-        .allowsHitTesting(false)
     }
 
     private func qualityMenu<Label: View>(@ViewBuilder label: () -> Label) -> some View {
@@ -1029,7 +992,13 @@ struct PlayerView: View {
             }
             .padding(24)
             .id("detailTop")
-            .background(ScrollOffsetObserver { detailScrollOffset = $0 })
+            .background(ScrollOffsetObserver { offset in
+                // 只关心收起播放区所需的距离；超过后不再更新，避免滚动评论时无谓地重绘整个页面。
+                let clamped = min(offset, Self.collapseDistance)
+                if abs(clamped - detailScrollOffset) >= 1 {
+                    detailScrollOffset = clamped
+                }
+            })
         }
         .onChange(of: scrollToTopToken) { _, _ in
             withAnimation(.easeInOut(duration: 0.28)) {
@@ -1706,6 +1675,56 @@ private struct RelatedVideoRow: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+    }
+}
+
+/// 播放进度条与时间显示：单独观察播放时钟，避免每 30ms 的进度更新带动整个播放页（含评论列表）重绘。
+private struct PlaybackProgressControls: View {
+    @ObservedObject var viewModel: PlayerViewModel
+    @ObservedObject var clock: PlaybackClock
+
+    @State private var isSeeking = false
+    @State private var sliderValue: Double = 0
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(Fmt.duration(Int(clock.time)))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.9))
+                .monospacedDigit()
+
+            Slider(value: Binding(get: {
+                isSeeking ? sliderValue : min(clock.time, max(viewModel.duration, 1))
+            }, set: { sliderValue = $0 }), in: 0...max(viewModel.duration, 1)) { editing in
+                isSeeking = editing
+                if !editing {
+                    viewModel.seek(to: sliderValue)
+                }
+            }
+            .tint(Palette.pink)
+            .controlSize(.small)
+            .overlay { chapterMarks }
+
+            Text(Fmt.duration(Int(viewModel.duration)))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.9))
+                .monospacedDigit()
+        }
+    }
+
+    /// 进度条上的章节分隔标记。
+    private var chapterMarks: some View {
+        GeometryReader { proxy in
+            let total = max(viewModel.duration, 1)
+            ForEach(viewModel.chapters) { chapter in
+                Rectangle()
+                    .fill(.white.opacity(0.9))
+                    .frame(width: 1.5, height: 5)
+                    .position(x: proxy.size.width * min(1, max(0, chapter.start / total)),
+                              y: proxy.size.height / 2)
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 

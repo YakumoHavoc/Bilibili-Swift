@@ -22,6 +22,7 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
 
     private var windows: [PlayerWindow] = []
     private var keyMonitor: Any?
+    private var mouseMonitor: Any?
     /// 最近获得焦点的播放器窗口，用于 key window 被主窗口抢走时仍能响应空格/媒体键。
     private weak var activeWindow: NSWindow?
 
@@ -46,6 +47,37 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
             }
             return consumed ? nil : event
         }
+
+        // 点击评论/弹幕输入框以外的区域时主动结束输入状态，
+        // 否则焦点一直留在输入框里，方向键等快捷键会被输入框吞掉。
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
+            let windowNumber = event.windowNumber
+            let point = event.locationInWindow
+            MainActor.assumeIsolated {
+                self?.resignTextFocusIfNeeded(windowNumber: windowNumber, point: point)
+            }
+            return event
+        }
+    }
+
+    /// 若当前焦点在文本输入框，且点击落点不在输入控件内，则移走焦点。
+    private func resignTextFocusIfNeeded(windowNumber: Int, point: NSPoint) {
+        guard windowNumber != 0,
+              let window = NSApp.window(withWindowNumber: windowNumber),
+              windows.contains(where: { $0.window === window }),
+              window.firstResponder is NSText else { return }
+        if let hit = window.contentView?.hitTest(point), Self.isTextInput(hit) { return }
+        window.makeFirstResponder(nil)
+    }
+
+    /// 判断点击到的视图是否属于文本输入控件（或其子视图）。
+    private static func isTextInput(_ view: NSView) -> Bool {
+        var current: NSView? = view
+        while let candidate = current {
+            if candidate is NSText || candidate is NSTextView { return true }
+            current = candidate.superview
+        }
+        return false
     }
 
     /// 返回 true 表示该按键已被播放器消费。

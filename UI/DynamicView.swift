@@ -1560,6 +1560,7 @@ struct ImageViewerSheet: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(index == 0)
+                        .keyboardShortcut(.leftArrow, modifiers: [])
 
                         Button {
                             index = min(images.count - 1, index + 1)
@@ -1568,6 +1569,7 @@ struct ImageViewerSheet: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(index >= images.count - 1)
+                        .keyboardShortcut(.rightArrow, modifiers: [])
                     }
                     .padding(.bottom, 18)
                 }

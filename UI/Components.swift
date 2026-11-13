@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 // MARK: - 主窗口注册
 
@@ -37,6 +38,56 @@ struct WindowDragArea: NSViewRepresentable {
         override func mouseDown(with event: NSEvent) {
             window?.performDrag(with: event)
         }
+    }
+}
+
+// MARK: - 图片另存
+
+enum ImageSaveResult {
+    case saved
+    case cancelled
+    case failed
+}
+
+enum ImageSaver {
+    /// 下载原图后弹出系统保存面板，由用户选择存储位置并保存为 PNG。
+    @MainActor
+    static func save(urlString: String, suggestedName: String) async -> ImageSaveResult {
+        guard let url = URL(string: urlString) else { return .failed }
+        var request = URLRequest(url: url)
+        request.setValue(BiliClient.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("https://www.bilibili.com/", forHTTPHeaderField: "Referer")
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode),
+              let image = NSImage(data: data) else {
+            return .failed
+        }
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.png]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = suggestedName
+        guard panel.runModal() == .OK, let destination = panel.url else { return .cancelled }
+        guard let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let png = bitmap.representation(using: .png, properties: [:]) else {
+            return .failed
+        }
+        return (try? png.write(to: destination)) != nil ? .saved : .failed
+    }
+
+    /// 根据图片地址生成默认文件名。
+    static func fileName(for urlString: String) -> String {
+        guard let url = URL(string: urlString) else { return "图片.png" }
+        let base = url.deletingPathExtension().lastPathComponent
+        return base.isEmpty ? "图片.png" : "\(base).png"
+    }
+
+    /// 表情的默认文件名：[doge] → doge.png。
+    static func emoteFileName(_ token: String) -> String {
+        let name = token.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        return name.isEmpty ? "表情.png" : "\(name).png"
     }
 }
 

@@ -576,6 +576,28 @@ struct ReplyEmote: Decodable {
     let url: String?
 }
 
+/// 表情面板：用于把文本里的 [表情名] 映射到图片地址（私信等不返回 emote 字典的场景）。
+struct EmotePanelData: Decodable {
+    let packages: [EmotePackage]?
+}
+
+struct EmotePackage: Decodable {
+    /// 1=普通表情包，3=付费表情包（装扮/表情包）。
+    let type: Int?
+    let emote: [EmoteItem]?
+}
+
+/// 表情的图片地址与是否需要放大展示（付费表情按 4 倍尺寸显示）。
+struct EmoteInfo {
+    let url: String
+    let isPaid: Bool
+}
+
+struct EmoteItem: Decodable {
+    let text: String?
+    let url: String?
+}
+
 struct ReplyPicture: Decodable {
     let img_src: String?
 }

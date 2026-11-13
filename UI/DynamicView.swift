@@ -1383,21 +1383,37 @@ struct DynamicCommentList: View {
 struct CommentMessageText: View {
     let message: String
     let emotes: [String: ReplyEmote]
+    var fontSize: CGFloat = 13
+    var color: Color = Palette.text1
+    /// 付费表情是否放大展示：仅消息详情等适合大图的位置开启。
+    var enlargePaidEmotes = false
+    /// 右键另存表情：参数为表情占位符与图片地址。
+    var onSaveEmote: ((String, String) -> Void)?
 
     @State private var images: [String: NSImage] = [:]
+    @State private var emoteURLs: [String: String] = [:]
 
     var body: some View {
         text
-            .font(.system(size: 13))
-            .foregroundStyle(Palette.text1)
+            .font(.system(size: fontSize))
+            .foregroundStyle(color)
             .lineSpacing(3)
             .fixedSize(horizontal: false, vertical: true)
             .task(id: message) { await loadEmotes() }
+            .contextMenu {
+                if let onSaveEmote {
+                    ForEach(emoteURLs.sorted { $0.key < $1.key }, id: \.key) { item in
+                        Button("存储表情 \(item.key)…") {
+                            onSaveEmote(item.key, item.value)
+                        }
+                    }
+                }
+            }
     }
 
     /// 把 [表情名] 替换成等比缩放的图片，其余文本原样拼接，保留自动换行。
     private var text: Text {
-        guard !emotes.isEmpty else { return Text(message) }
+        guard !images.isEmpty else { return Text(message) }
 
         var result = Text(verbatim: "")
         var buffer = ""
@@ -1427,15 +1443,45 @@ struct CommentMessageText: View {
         return result
     }
 
+    /// 文本里出现的表情占位符（如 [doge]）。
+    private var tokens: [String] {
+        guard message.contains("[") else { return [] }
+        var found: [String] = []
+        var index = message.startIndex
+        while index < message.endIndex {
+            if message[index] == "[",
+               let close = message[index...].firstIndex(of: "]") {
+                found.append(String(message[index...close]))
+                index = message.index(after: close)
+            } else {
+                index = message.index(after: index)
+            }
+        }
+        return found
+    }
+
     private func loadEmotes() async {
-        guard !emotes.isEmpty else { return }
+        let found = Array(Set(tokens))
+        guard !found.isEmpty else {
+            images = [:]
+            emoteURLs = [:]
+            return
+        }
         var loaded: [String: NSImage] = [:]
-        for (token, emote) in emotes {
-            let url = ImageURL.fix(emote.url)
+        var urls: [String: String] = [:]
+        for token in found {
+            // 评论接口自带表情字典，私信等场景回退到全局表情面板。
+            let info = await EmoteStore.shared.info(for: token)
+            let raw = emotes[token]?.url ?? info?.url
+            let url = ImageURL.fix(raw)
             guard !url.isEmpty, let image = await ImageLoader.shared.load(url) else { continue }
-            loaded[token] = Self.scaled(image, side: 18)
+            // 付费表情仅在详情等位置按 4 倍尺寸展示，列表与评论保持普通尺寸。
+            let side: CGFloat = (enlargePaidEmotes && (info?.isPaid ?? false)) ? 72 : 18
+            loaded[token] = Self.scaled(image, side: side)
+            urls[token] = url
         }
         images = loaded
+        emoteURLs = urls
     }
 
     private static func scaled(_ image: NSImage, side: CGFloat) -> NSImage {

@@ -335,9 +335,13 @@ struct MessagesView: View {
                             .foregroundStyle(Palette.text3)
                     }
                     HStack(spacing: 6) {
-                        Text(snippet)
-                            .font(.system(size: 11))
-                            .foregroundStyle(Palette.text2)
+                        CommentMessageText(message: snippet,
+                                           emotes: [:],
+                                           fontSize: 11,
+                                           color: Palette.text2,
+                                           onSaveEmote: { token, url in
+                                               saveEmote(token: token, url: url)
+                                           })
                             .lineLimit(1)
                         Spacer(minLength: 4)
                         if badge > 0 {
@@ -386,10 +390,13 @@ struct MessagesView: View {
                     LazyVStack(spacing: 10) {
                         ForEach(conversation.sorted { ($0.timestamp ?? 0) < ($1.timestamp ?? 0) }, id: \.ident) { message in
                             bubble(message)
+                                .id(message.ident)
                         }
                     }
                     .padding(20)
                 }
+                // 打开会话时直接定位到最新消息，而不是停在最早的记录。
+                .defaultScrollAnchor(.bottom)
             }
         }
     }
@@ -402,9 +409,13 @@ struct MessagesView: View {
                 if let video = Self.sharedVideo(message.content, type: message.msg_type) {
                     videoCard(video, time: message.timestamp ?? 0)
                 } else {
-                    Text(Self.plainText(message.content, type: message.msg_type))
-                        .font(.system(size: 12))
-                        .foregroundStyle(mine ? .white : Palette.text1)
+                    CommentMessageText(message: Self.plainText(message.content, type: message.msg_type),
+                                       emotes: [:],
+                                       fontSize: 12,
+                                       color: mine ? .white : Palette.text1,
+                                       onSaveEmote: { token, url in
+                                           saveEmote(token: token, url: url)
+                                       })
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(mine ? Palette.pink : Palette.bgRegular)
@@ -415,6 +426,20 @@ struct MessagesView: View {
                     .foregroundStyle(Palette.text3)
             }
             if !mine { Spacer(minLength: 40) }
+        }
+    }
+
+    /// 右键另存私信里的表情。
+    private func saveEmote(token: String, url: String) {
+        Task {
+            switch await ImageSaver.save(urlString: url, suggestedName: ImageSaver.emoteFileName(token)) {
+            case .saved:
+                app.showToast("表情已保存")
+            case .failed:
+                app.showToast("表情保存失败")
+            case .cancelled:
+                break
+            }
         }
     }
 
@@ -492,15 +517,23 @@ struct MessagesView: View {
                 Spacer()
             }
 
-            Text(feed.content)
-                .font(.system(size: 13))
-                .foregroundStyle(Palette.text1)
-                .textSelection(.enabled)
+            CommentMessageText(message: feed.content,
+                               emotes: [:],
+                               fontSize: 13,
+                               enlargePaidEmotes: true,
+                               onSaveEmote: { token, url in
+                                   saveEmote(token: token, url: url)
+                               })
 
             if !feed.title.isEmpty {
-                Text(feed.title)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Palette.text2)
+                CommentMessageText(message: feed.title,
+                                   emotes: [:],
+                                   fontSize: 12,
+                                   color: Palette.text2,
+                                   enlargePaidEmotes: true,
+                                   onSaveEmote: { token, url in
+                                       saveEmote(token: token, url: url)
+                                   })
                     .lineLimit(2)
             }
 

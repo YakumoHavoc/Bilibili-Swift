@@ -829,4 +829,24 @@ enum BiliAPI {
         )
         return data.messages ?? []
     }
+
+    /// 表情面板：返回 [表情名] → 图片地址与是否付费表情。
+    static func emotePanel() async throws -> [String: EmoteInfo] {
+        let data: EmotePanelData = try await BiliClient.shared.get(
+            "https://api.bilibili.com/x/emote/user/panel/web",
+            params: ["business": "reply"],
+            referer: "https://www.bilibili.com/"
+        )
+        var map: [String: EmoteInfo] = [:]
+        for package in data.packages ?? [] {
+            let isPaid = (package.type ?? 0) == 3
+            for emote in package.emote ?? [] {
+                guard let text = emote.text, !text.isEmpty, let url = emote.url, !url.isEmpty else { continue }
+                // 付费表情的 text 自带方括号，普通表情则不带，统一成 [表情名] 形式。
+                let key = text.hasPrefix("[") ? text : "[\(text)]"
+                map[key] = EmoteInfo(url: url, isPaid: isPaid)
+            }
+        }
+        return map
+    }
 }

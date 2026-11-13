@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 struct PlayerView: View {
     @EnvironmentObject private var app: AppState
@@ -26,6 +27,8 @@ struct PlayerView: View {
     @State private var expandedThreads: Set<Int> = []
     /// 直播弹幕输入框。
     @State private var danmakuDraft = ""
+    /// 评论图片 / 表情的原图查看。
+    @State private var imageViewer: ImageViewerPayload?
 
     /// 滚过这段距离后播放区域完全收起。
     private static let collapseDistance: CGFloat = 360
@@ -119,6 +122,9 @@ struct PlayerView: View {
         }
         .background(Palette.bg)
         .preferredColorScheme(app.themeMode.colorScheme)
+        .sheet(item: $imageViewer) { payload in
+            ImageViewerSheet(payload: payload)
+        }
         .task { await viewModel.load() }
         .onChange(of: viewModel.title) { _, _ in
             // 切换视频/合集内其他视频后回到顶部，恢复播放区域。
@@ -1440,11 +1446,41 @@ struct PlayerView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 3))
                     }
                 }
-                Text(reply.content?.message ?? "")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Palette.text1)
-                    .lineSpacing(3)
-                    .textSelection(.enabled)
+                CommentMessageText(message: reply.content?.message ?? "",
+                                   emotes: reply.content?.emote ?? [:],
+                                   fontSize: 12,
+                                   onSaveEmote: { token, url in
+                                       saveImage(url, suggestedName: ImageSaver.emoteFileName(token))
+                                   })
+
+                if let pictures = reply.content?.pictures, !pictures.isEmpty {
+                    let urls = pictures.compactMap { ImageURL.fix($0.img_src) }.filter { !$0.isEmpty }
+                    if !urls.isEmpty {
+                        LazyVGrid(columns: Array(repeating: GridItem(.fixed(92), spacing: 6),
+                                                 count: min(3, urls.count)),
+                                  alignment: .leading,
+                                  spacing: 6) {
+                            ForEach(Array(urls.enumerated()), id: \.offset) { index, url in
+                                RemoteImage(url: ImageURL.thumb(url, width: 240, height: 240))
+                                    .frame(width: 92, height: 92)
+                                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        imageViewer = ImageViewerPayload(images: urls, index: index)
+                                    }
+                                    .contextMenu {
+                                        Button("查看大图") {
+                                            imageViewer = ImageViewerPayload(images: urls, index: index)
+                                        }
+                                        Button("存储图片…") {
+                                            saveImage(url, suggestedName: ImageSaver.fileName(for: url))
+                                        }
+                                    }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
 
                 HStack(spacing: 14) {
                     Button {
@@ -1509,6 +1545,20 @@ struct PlayerView: View {
             }
             Spacer(minLength: 0)
         })
+    }
+
+    /// 另存评论图片 / 表情：先下载原图，再弹出保存面板让用户选择存储位置。
+    private func saveImage(_ urlString: String, suggestedName: String) {
+        Task {
+            switch await ImageSaver.save(urlString: urlString, suggestedName: suggestedName) {
+            case .saved:
+                app.showToast("已保存")
+            case .failed:
+                app.showToast("图片保存失败")
+            case .cancelled:
+                break
+            }
+        }
     }
 
     /// 楼中楼里的内联回复输入框。

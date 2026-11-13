@@ -61,6 +61,8 @@ struct MainView: View {
             CinemaView()
         case .dynamic:
             DynamicView()
+        case .messages:
+            MessagesView()
         case .favorites:
             FavoritesView()
         case .downloads:

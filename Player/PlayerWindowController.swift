@@ -70,12 +70,31 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
 
         if type == NSEvent.EventType.keyDown.rawValue {
             let flags = NSEvent.ModifierFlags(rawValue: modifiers)
-            guard keyCode == 49,
-                  flags.intersection([.command, .option, .control, .shift]).isEmpty else {
+            guard flags.intersection([.command, .option, .control, .shift]).isEmpty else {
                 return false
             }
-            viewModel.togglePlay()
-            return true
+            switch keyCode {
+            case 49:
+                // 空格：播放 / 暂停。
+                viewModel.togglePlay()
+                return true
+            case 123:
+                // ←：快退 5 秒。
+                return viewModel.skip(by: -5)
+            case 124:
+                // →：快进 5 秒。
+                return viewModel.skip(by: 5)
+            case 126:
+                // ↑：音量 +10%。
+                viewModel.adjustVolume(by: 0.1)
+                return true
+            case 125:
+                // ↓：音量 -10%。
+                viewModel.adjustVolume(by: -0.1)
+                return true
+            default:
+                return false
+            }
         }
 
         // 系统媒体键：subtype 8 为辅助控制键，keyCode 16 为播放/暂停。

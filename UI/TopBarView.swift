@@ -42,6 +42,7 @@ struct TopBarView: View {
                 .background(WindowDragArea())
 
             PlainIconButton(systemName: themeIcon, action: cycleTheme, help: "切换主题")
+            PlainIconButton(systemName: "envelope", action: { app.navigate(.messages) }, help: "消息")
 
             if let user = app.user {
                 // 与左下角一致的小圆形头像：Menu 的 label 会按图片原始尺寸渲染，

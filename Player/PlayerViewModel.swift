@@ -133,6 +133,14 @@ final class PlayerViewModel: ObservableObject {
     @Published var liveMedals: [LiveMedal] = []
     @Published var wornMedalID: Int?
     @Published var isSendingDanmaku = false
+    /// 方向键控制的软件音量（0～1），不影响系统音量。
+    @Published var volume: Double = 1
+    /// 方向键操作后的短暂提示（快进时间 / 音量）。
+    @Published var keyHint: String?
+    /// 直播已结束或断流：保留最后一帧并显示提示，避免窗口直接变黑。
+    @Published var liveEnded = false
+    @Published var liveEndFrame: NSImage?
+    private var keyHintTask: Task<Void, Never>?
     @Published var pages: [VideoPage] = []
     @Published var currentPageIndex = 0
     @Published var isLoadingComments = false
@@ -192,8 +200,10 @@ final class PlayerViewModel: ObservableObject {
         self.title = title
         self.selectedQuality = quality
         self.cover = cover
+        let savedVolume = UserDefaults.standard.object(forKey: "player.volume") as? Double ?? 1
+        self.volume = savedVolume
         player.automaticallyWaitsToMinimizeStalling = true
-        player.volume = 1.0
+        player.volume = Float(savedVolume)
 
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: CMTime(seconds: 0.03, preferredTimescale: 600),
@@ -220,9 +230,14 @@ final class PlayerViewModel: ObservableObject {
             forName: .AVPlayerItemDidPlayToEndTime,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
             MainActor.assumeIsolated {
-                self?.isPlaying = false
+                guard let self else { return }
+                // 多窗口时只处理当前播放项自己的结束通知。
+                if let item = notification.object as? AVPlayerItem,
+                   item !== self.player.currentItem { return }
+                self.isPlaying = false
+                if self.isLive { self.handleLiveEnded() }
             }
         }
 
@@ -230,9 +245,13 @@ final class PlayerViewModel: ObservableObject {
             forName: .AVPlayerItemFailedToPlayToEndTime,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
             MainActor.assumeIsolated {
-                self?.isPlaying = false
+                guard let self else { return }
+                if let item = notification.object as? AVPlayerItem,
+                   item !== self.player.currentItem { return }
+                self.isPlaying = false
+                if self.isLive { self.handleLiveEnded() }
             }
         }
 
@@ -382,6 +401,8 @@ final class PlayerViewModel: ObservableObject {
         danmakuItems = []
         liveMessages = []
         liveFrameReady = false
+        liveEnded = false
+        liveEndFrame = nil
         referer = "https://live.bilibili.com/\(roomID)"
         connectLiveDanmaku(roomID: roomID)
         // 拉取历史弹幕，先铺满弹幕列表，避免进入房间后空白等待。
@@ -445,6 +466,8 @@ final class PlayerViewModel: ObservableObject {
             // 切画质同样立即开播，避免黑屏等待。
             player.play()
             liveFrameReady = false
+            liveEnded = false
+            liveEndFrame = nil
             isPlaying = true
         } catch {
             errorMessage = error.localizedDescription
@@ -472,7 +495,7 @@ final class PlayerViewModel: ObservableObject {
     }
 
     private func recoverStalledLive() async {
-        guard isLive, isPlaying, let roomID = liveRoomID,
+        guard isLive, isPlaying, !liveEnded, let roomID = liveRoomID,
               let since = stallSince,
               Date().timeIntervalSince(since) >= 4,
               player.timeControlStatus == .waitingToPlayAtSpecifiedRate else { return }
@@ -480,6 +503,9 @@ final class PlayerViewModel: ObservableObject {
         // 换节点会短暂重新缓冲，短时间内不重复触发。
         if let last = lastLiveNodeSwitch, Date().timeIntervalSince(last) < 15 { return }
         lastLiveNodeSwitch = Date()
+
+        // 先留存当前画面，万一新节点也拉不到流，至少不会只剩黑屏。
+        if let frame = captureLiveFrame() { liveEndFrame = frame }
 
         do {
             let info = try await BiliAPI.livePlayInfo(roomID: roomID, qn: selectedQuality)
@@ -881,7 +907,7 @@ final class PlayerViewModel: ObservableObject {
         let player = self.player
         // 确保没有残留的静音/零音量状态。
         player.isMuted = false
-        player.volume = 1.0
+        player.volume = Float(volume)
 
         Task { [weak self] in
             for _ in 0..<60 {
@@ -1049,6 +1075,52 @@ final class PlayerViewModel: ObservableObject {
         let progress = currentTime
         guard progress > 1 else { return }
         Task { await BiliAPI.reportVideoHistory(aid: aid, cid: cid, progress: progress) }
+    }
+
+    /// 方向键左右快退/快进；直播与未知时长时不可拖动，返回 false 表示未消费该按键。
+    @discardableResult
+    func skip(by seconds: Double) -> Bool {
+        guard !isLive, duration > 0, !isRecordingPlayback else { return false }
+        let target = min(max(0, currentTime + seconds), max(0, duration - 0.2))
+        seek(to: target)
+        showKeyHint("\(seconds > 0 ? "快进" : "快退") \(Int(abs(seconds))) 秒 · \(Fmt.duration(Int(target)))")
+        return true
+    }
+
+    /// 方向键上下调节软件音量（每次 10%）。
+    func adjustVolume(by delta: Double) {
+        let next = min(1, max(0, volume + delta))
+        volume = next
+        player.volume = Float(next)
+        UserDefaults.standard.set(next, forKey: "player.volume")
+        showKeyHint("音量 \(Int((next * 100).rounded()))%")
+    }
+
+    private func showKeyHint(_ text: String) {
+        keyHint = text
+        keyHintTask?.cancel()
+        keyHintTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            guard !Task.isCancelled else { return }
+            self?.keyHint = nil
+        }
+    }
+
+    /// 直播结束/断流：抓住最后一帧作为静态画面，避免窗口变成纯黑。
+    private func handleLiveEnded() {
+        guard !liveEnded else { return }
+        liveEnded = true
+        if let frame = captureLiveFrame() { liveEndFrame = frame }
+    }
+
+    private func captureLiveFrame() -> NSImage? {
+        guard let output = snapshotOutput,
+              let buffer = output.copyPixelBuffer(forItemTime: player.currentTime(),
+                                                 itemTimeForDisplay: nil) else { return nil }
+        let ciImage = CIImage(cvPixelBuffer: buffer)
+        guard let cgImage = Self.snapshotContext.createCGImage(ciImage, from: ciImage.extent) else { return nil }
+        return NSImage(cgImage: cgImage,
+                       size: NSSize(width: cgImage.width, height: cgImage.height))
     }
 
     func seek(to seconds: Double) {

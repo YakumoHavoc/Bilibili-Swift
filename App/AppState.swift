@@ -9,6 +9,7 @@ enum Page: Hashable {
     case bangumi
     case cinema
     case dynamic
+    case messages
     case favorites
     case downloads
     case recordings

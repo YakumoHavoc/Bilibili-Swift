@@ -157,6 +157,35 @@ struct PlayerView: View {
 
             VideoSurface(player: viewModel.player)
 
+            // 直播结束/断流时保留最后一帧静态画面，而不是留下纯黑窗口。
+            if viewModel.isLive, viewModel.liveEnded {
+                Group {
+                    if let frame = viewModel.liveEndFrame {
+                        Image(nsImage: frame)
+                            .resizable()
+                            .scaledToFit()
+                    } else if !viewModel.cover.isEmpty {
+                        RemoteImage(url: viewModel.cover, contentMode: .fit)
+                    } else {
+                        Color.black
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black)
+                .overlay(Color.black.opacity(0.35))
+                .overlay {
+                    VStack(spacing: 8) {
+                        Image(systemName: "dot.radiowaves.left.and.right")
+                            .font(.system(size: 24, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.9))
+                        Text("直播已结束")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .allowsHitTesting(false)
+            }
+
             if app.danmakuEnabled, !viewModel.danmakuItems.isEmpty {
                 DanmakuOverlay(items: viewModel.danmakuItems,
                                time: viewModel.currentTime,
@@ -169,7 +198,7 @@ struct PlayerView: View {
                 .opacity(min(1, Double(collapse) * 4))
                 .allowsHitTesting(false)
 
-            if viewModel.isLoading || (viewModel.isLive && !viewModel.liveFrameReady && viewModel.errorMessage == nil) {
+            if viewModel.isLoading || (viewModel.isLive && !viewModel.liveFrameReady && !viewModel.liveEnded && viewModel.errorMessage == nil) {
                 VStack(spacing: 10) {
                     ProgressView().controlSize(.large).tint(.white)
                     Text(viewModel.isLive ? "正在加载直播画面…" : "加载视频中…")
@@ -205,6 +234,18 @@ struct PlayerView: View {
                 .opacity(controlsVisible ? 1 : 0)
                 .animation(.easeInOut(duration: 0.2), value: controlsVisible)
                 .allowsHitTesting(controlsVisible)
+
+            // 方向键操作提示：快进/快退时间、音量百分比。
+            if let hint = viewModel.keyHint {
+                Text(hint)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .background(Color.black.opacity(0.66))
+                    .clipShape(Capsule())
+                    .allowsHitTesting(false)
+            }
 
             if let downloadNotice {
                 VStack {

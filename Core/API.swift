@@ -769,4 +769,64 @@ enum BiliAPI {
             referer: "https://live.bilibili.com/\(roomID)"
         )
     }
+
+    // MARK: - 消息中心
+
+    static func replyMessages() async throws -> [MsgFeedReplyItem] {
+        let data: MsgFeedList<MsgFeedReplyItem> = try await BiliClient.shared.get(
+            "https://api.bilibili.com/x/msgfeed/reply",
+            params: ["platform": "web", "build": "0", "mobi_app": "web"],
+            referer: "https://message.bilibili.com/"
+        )
+        return data.items ?? []
+    }
+
+    static func atMessages() async throws -> [MsgFeedAtItem] {
+        let data: MsgFeedList<MsgFeedAtItem> = try await BiliClient.shared.get(
+            "https://api.bilibili.com/x/msgfeed/at",
+            params: ["platform": "web", "build": "0", "mobi_app": "web"],
+            referer: "https://message.bilibili.com/"
+        )
+        return data.items ?? []
+    }
+
+    static func likeMessages() async throws -> [MsgFeedLikeItem] {
+        let data: MsgLikeFeedData = try await BiliClient.shared.get(
+            "https://api.bilibili.com/x/msgfeed/like",
+            params: ["platform": "web", "build": "0", "mobi_app": "web"],
+            referer: "https://message.bilibili.com/"
+        )
+        return data.total?.items ?? []
+    }
+
+    /// 私信会话列表。
+    static func messageSessions() async throws -> [MsgSession] {
+        let data: MsgSessionData = try await BiliClient.shared.get(
+            "https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions",
+            params: ["session_type": "1", "group_id": "0", "build": "0", "mobi_app": "web"],
+            referer: "https://message.bilibili.com/"
+        )
+        return data.session_list ?? []
+    }
+
+    /// 批量获取用户名片（昵称、头像），用于会话列表。
+    static func userCards(uids: [Int]) async throws -> [MsgUserCard] {
+        guard !uids.isEmpty else { return [] }
+        let list: [MsgUserCard] = try await BiliClient.shared.get(
+            "https://api.vc.bilibili.com/account/v1/user/cards",
+            params: ["uids": uids.map(String.init).joined(separator: ",")],
+            referer: "https://message.bilibili.com/"
+        )
+        return list
+    }
+
+    /// 某个会话的消息记录。
+    static func conversationMessages(talkerID: Int) async throws -> [MsgConversationMessage] {
+        let data: MsgMessagesData = try await BiliClient.shared.get(
+            "https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs",
+            params: ["talker_id": String(talkerID), "session_type": "1", "size": "30"],
+            referer: "https://message.bilibili.com/"
+        )
+        return data.messages ?? []
+    }
 }

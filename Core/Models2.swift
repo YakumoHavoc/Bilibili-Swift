@@ -627,3 +627,100 @@ struct DanmakuItem {
     let fontSize: Double
 }
 
+// MARK: - 消息中心
+
+struct MsgFeedUser: Decodable {
+    let mid: Int?
+    let nickname: String?
+    let avatar: String?
+}
+
+/// 消息关联的原始内容（视频、动态、评论等）。
+struct MsgFeedTarget: Decodable {
+    let title: String?
+    let business: String?
+    let type: String?
+    let uri: String?
+    let image: String?
+    let subject_id: Int?
+    let source_content: String?
+    let root_reply_content: String?
+    let target_reply_content: String?
+    let like_state: Int?
+}
+
+struct MsgFeedReplyItem: Decodable {
+    let id: Int?
+    let user: MsgFeedUser?
+    let item: MsgFeedTarget?
+    let counts: Int?
+    let is_multi: Int?
+    let reply_time: Int?
+    var ident: Int { id ?? 0 }
+}
+
+struct MsgFeedAtItem: Decodable {
+    let id: Int?
+    let user: MsgFeedUser?
+    let item: MsgFeedTarget?
+    let at_time: Int?
+    var ident: Int { id ?? 0 }
+}
+
+struct MsgFeedLikeItem: Decodable {
+    let id: Int?
+    let users: [MsgFeedUser]?
+    let item: MsgFeedTarget?
+    /// 该条点赞消息聚合的人数（接口返回整数）。
+    let counts: Int?
+    let like_time: Int?
+    var ident: Int { id ?? 0 }
+}
+
+struct MsgFeedList<T: Decodable>: Decodable {
+    let items: [T]?
+}
+
+struct MsgLikeFeedData: Decodable {
+    let total: MsgFeedList<MsgFeedLikeItem>?
+}
+
+/// 私信会话。
+struct MsgSession: Decodable {
+    let talker_id: Int?
+    let unread_count: Int?
+    let session_ts: Int?
+    let group_name: String?
+    let last_msg: MsgLastMessage?
+    var ident: Int { talker_id ?? 0 }
+}
+
+struct MsgLastMessage: Decodable {
+    let content: String?
+    let msg_type: Int?
+    let timestamp: Int?
+}
+
+struct MsgUserCard: Decodable {
+    let mid: Int?
+    let name: String?
+    let face: String?
+}
+
+struct MsgSessionData: Decodable {
+    let session_list: [MsgSession]?
+}
+
+struct MsgConversationMessage: Decodable {
+    let msg_key: Int?
+    let msg_type: Int?
+    let content: String?
+    let timestamp: Int?
+    let sender_uid: Int?
+    var ident: Int { msg_key ?? 0 }
+}
+
+struct MsgMessagesData: Decodable {
+    let messages: [MsgConversationMessage]?
+}
+

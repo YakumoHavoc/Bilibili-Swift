@@ -111,6 +111,10 @@ final class PlayerViewModel: ObservableObject {
     @Published var seasonEpisodes: [UgcEpisode] = []
     /// 当前播放视频在合集内的 aid，用于高亮。
     @Published var currentSeasonAid: Int?
+    /// 番剧的全部剧集，用于播放页右侧选集。
+    @Published var bangumiEpisodes: [EpisodeDTO] = []
+    /// 当前播放的剧集 ep id，用于选集高亮。
+    @Published var currentEpisodeID: Int?
     /// 播放页右侧的相关视频推荐。
     @Published var relatedVideos: [VideoCard] = []
     @Published var isLoadingRelated = false
@@ -168,6 +172,11 @@ final class PlayerViewModel: ObservableObject {
 
     let player = AVPlayer()
     let mode: PlaybackMode
+    /// 当前窗口是否在播放番剧（PGC），用于把右侧相关推荐替换为选集。
+    var isBangumi: Bool {
+        if case .episode = mode { return true }
+        return false
+    }
     /// 每个播放窗口独立的录制标识，多个直播窗口可各自录制互不影响。
     let recordingOwner = UUID()
 
@@ -371,10 +380,13 @@ final class PlayerViewModel: ObservableObject {
 
     private func loadEpisode(epID: Int) async throws {
         let season = try await BiliAPI.seasonInfo(epID: epID)
-        guard let episode = season.episodes?.first(where: { $0.ep_id == epID }) ?? season.episodes?.first else {
+        let episodes = season.episodes ?? []
+        guard let episode = episodes.first(where: { $0.ep_id == epID }) ?? episodes.first else {
             throw BiliError.decoding("未找到该剧集信息")
         }
+        bangumiEpisodes = episodes
         episodeID = episode.ep_id ?? epID
+        currentEpisodeID = episodeID
         bvid = episode.bvid
         aid = episode.aid
         cid = episode.cid
@@ -386,10 +398,33 @@ final class PlayerViewModel: ObservableObject {
         danmakuCount = season.stat?.danmakus ?? 0
         pubdate = episode.pub_time ?? 0
         referer = "https://www.bilibili.com/bangumi/play/ep\(episode.ep_id ?? epID)/"
+        // 换集后互动数据属于上一集，先重置避免显示错乱。
+        likeCount = 0
+        coinCount = 0
+        favoriteCount = 0
+        isLiked = false
+        isFavorited = false
+        coinsGiven = 0
+        favoriteFolderID = nil
 
         startAuxiliaryLoading(cid: cid)
 
         try await refreshPlayURL()
+    }
+
+    /// 切换到同一部番剧的其他剧集（在当前播放窗口内）。
+    func playEpisode(_ episode: EpisodeDTO) async {
+        guard let target = episode.ep_id, target != episodeID else { return }
+        setCurrentTime(0)
+        danmakuItems = []
+        comments = []
+        isLoading = true
+        do {
+            try await loadEpisode(epID: target)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
     }
 
     private func startAuxiliaryLoading(cid: Int?) {

@@ -823,6 +823,17 @@ struct PlayerView: View {
     }
 
     private var relatedPane: some View {
+        Group {
+            if viewModel.isBangumi {
+                episodePane
+            } else {
+                relatedVideoPane
+            }
+        }
+        .background(Palette.bg)
+    }
+
+    private var relatedVideoPane: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Text("相关推荐")
@@ -860,7 +871,98 @@ struct PlayerView: View {
                 .padding(.vertical, 6)
             }
         }
-        .background(Palette.bg)
+    }
+
+    /// 番剧播放窗口：右侧改为选集，替代为空的相关推荐。
+    private var episodePane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text("选集")
+                    .font(.ui(13, weight: .semibold))
+                    .foregroundStyle(Palette.text1)
+                Text("(\(currentBangumiIndex)/\(viewModel.bangumiEpisodes.count))")
+                    .font(.ui(11))
+                    .foregroundStyle(Palette.text3)
+                Spacer()
+                if viewModel.isLoading {
+                    ProgressView().controlSize(.mini)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+
+            Rectangle()
+                .fill(Palette.line)
+                .frame(height: 1)
+
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    if viewModel.bangumiEpisodes.isEmpty {
+                        Text(viewModel.isLoading ? "正在加载剧集…" : "暂无剧集")
+                            .font(.ui(12))
+                            .foregroundStyle(Palette.text3)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 24)
+                    } else {
+                        ForEach(Array(viewModel.bangumiEpisodes.enumerated()), id: \.offset) { index, episode in
+                            episodeRow(episode, index: index)
+                        }
+                    }
+                }
+                .padding(.vertical, 6)
+            }
+        }
+    }
+
+    /// 当前剧集在番剧列表中的位置（从 1 开始）。
+    private var currentBangumiIndex: Int {
+        guard let id = viewModel.currentEpisodeID,
+              let index = viewModel.bangumiEpisodes.firstIndex(where: { $0.ep_id == id }) else { return 0 }
+        return index + 1
+    }
+
+    private func episodeRow(_ episode: EpisodeDTO, index: Int) -> some View {
+        let isCurrent = episode.ep_id == viewModel.currentEpisodeID
+        return Button {
+            Task { await viewModel.playEpisode(episode) }
+        } label: {
+            HStack(spacing: 10) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(isCurrent ? Palette.pink : Palette.bgThin)
+                    Text("\(index + 1)")
+                        .font(.ui(10, weight: .semibold))
+                        .foregroundStyle(isCurrent ? .white : Palette.text3)
+                }
+                .frame(width: 24, height: 20)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(episode.title ?? "第 \(index + 1) 集")
+                        .font(.ui(12))
+                        .foregroundStyle(isCurrent ? Palette.pink : Palette.text1)
+                        .lineLimit(1)
+                    if let long = episode.long_title, !long.isEmpty {
+                        Text(long)
+                            .font(.ui(10))
+                            .foregroundStyle(Palette.text3)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                    }
+                }
+                Spacer(minLength: 4)
+                if let duration = episode.duration, duration > 0 {
+                    Text(Fmt.duration(duration))
+                        .font(.ui(10))
+                        .foregroundStyle(Palette.text3)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(isCurrent ? Palette.pink.opacity(0.08) : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - 详情

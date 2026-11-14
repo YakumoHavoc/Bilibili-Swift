@@ -105,7 +105,7 @@ struct PlayerView: View {
                         scrollToTopToken += 1
                     } label: {
                         Label("返回顶部", systemImage: "arrow.up")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.ui(12, weight: .medium))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
@@ -132,7 +132,7 @@ struct PlayerView: View {
         .overlay(alignment: .bottom) {
             if let toast = app.toast {
                 Text(toast)
-                    .font(.system(size: 13))
+                    .font(.ui(13))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 9)
@@ -180,10 +180,10 @@ struct PlayerView: View {
                 .overlay {
                     VStack(spacing: 8) {
                         Image(systemName: "dot.radiowaves.left.and.right")
-                            .font(.system(size: 24, weight: .medium))
+                            .font(.ui(24, weight: .medium))
                             .foregroundStyle(.white.opacity(0.9))
                         Text("直播已结束")
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.ui(13, weight: .medium))
                             .foregroundStyle(.white)
                     }
                 }
@@ -206,23 +206,23 @@ struct PlayerView: View {
                 VStack(spacing: 10) {
                     ProgressView().controlSize(.large).tint(.white)
                     Text(viewModel.isLive ? "正在加载直播画面…" : "加载视频中…")
-                        .font(.system(size: 12))
+                        .font(.ui(12))
                         .foregroundStyle(.white.opacity(0.7))
                 }
             } else if let error = viewModel.errorMessage {
                 VStack(spacing: 14) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 34))
+                        .font(.ui(34))
                         .foregroundStyle(Palette.pink)
                     Text(error)
-                        .font(.system(size: 13))
+                        .font(.ui(13))
                         .foregroundStyle(.white)
                         .multilineTextAlignment(.center)
                     Button {
                         Task { await viewModel.retry() }
                     } label: {
                         Text("重试")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.ui(12, weight: .medium))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 22)
                             .padding(.vertical, 7)
@@ -242,7 +242,7 @@ struct PlayerView: View {
             // 方向键操作提示：快进/快退时间、音量百分比。
             if let hint = viewModel.keyHint {
                 Text(hint)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.ui(13, weight: .medium))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 9)
@@ -254,7 +254,7 @@ struct PlayerView: View {
             if let downloadNotice {
                 VStack {
                     Text(downloadNotice)
-                        .font(.system(size: 12))
+                        .font(.ui(12))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
@@ -302,7 +302,7 @@ struct PlayerView: View {
                             HStack(spacing: 4) {
                                 Circle().fill(Palette.pink).frame(width: 6, height: 6)
                                 Text("直播中")
-                                    .font(.system(size: 11, weight: .medium))
+                                    .font(.ui(11, weight: .medium))
                                     .foregroundStyle(.white)
                             }
                             .padding(.horizontal, 8)
@@ -311,7 +311,7 @@ struct PlayerView: View {
                             .clipShape(Capsule())
                         }
                         Text(viewModel.title)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.ui(13, weight: .medium))
                             .foregroundStyle(.white)
                             .lineLimit(1)
                         Spacer()
@@ -338,7 +338,7 @@ struct PlayerView: View {
                 viewModel.togglePlay()
             } label: {
                 Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.ui(16, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 28, height: 28)
             }
@@ -352,7 +352,7 @@ struct PlayerView: View {
                 }
             } else {
                 Text(viewModel.isRecordingPlayback ? "录制回放" : "直播画面")
-                    .font(.system(size: 11))
+                    .font(.ui(11))
                     .foregroundStyle(.white.opacity(0.8))
                 Spacer()
             }
@@ -361,7 +361,7 @@ struct PlayerView: View {
                 app.danmakuEnabled.toggle()
             } label: {
                 Image(systemName: app.danmakuEnabled ? "text.bubble.fill" : "text.bubble")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.ui(14, weight: .medium))
                     .foregroundStyle(app.danmakuEnabled ? Palette.pink : .white.opacity(0.8))
             }
             .buttonStyle(.plain)
@@ -377,7 +377,7 @@ struct PlayerView: View {
                 }
             } label: {
                 Image(systemName: "camera")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.ui(14, weight: .medium))
                     .foregroundStyle(.white.opacity(0.85))
             }
             .buttonStyle(.plain)
@@ -398,7 +398,7 @@ struct PlayerView: View {
                     }
                 } label: {
                     Image(systemName: "rectangle.rightthird.inset.filled")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.ui(14, weight: .medium))
                         .foregroundStyle(.white.opacity(0.85))
                 }
                 .menuStyle(.borderlessButton)
@@ -414,10 +414,10 @@ struct PlayerView: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: recording ? "stop.circle.fill" : "record.circle")
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.ui(15, weight: .medium))
                         if recording {
                             Text(Fmt.duration(Int(recorder.elapsed(for: viewModel.recordingOwner))))
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.ui(11, weight: .medium))
                                 .monospacedDigit()
                         }
                     }
@@ -428,7 +428,7 @@ struct PlayerView: View {
 
                 qualityMenu {
                     Text(qualityTitle)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.ui(12, weight: .medium))
                         .foregroundStyle(.white.opacity(0.9))
                 }
             } else if !viewModel.isRecordingPlayback {
@@ -438,7 +438,7 @@ struct PlayerView: View {
                     Image(systemName: isDetailHidden
                           ? "rectangle.inset.filled"
                           : "rectangle.bottomthird.inset.filled")
-                        .font(.system(size: 14))
+                        .font(.ui(14))
                         .foregroundStyle(.white.opacity(0.85))
                 }
                 .buttonStyle(.plain)
@@ -446,19 +446,19 @@ struct PlayerView: View {
 
                 speedMenu {
                     Image(systemName: "gauge.with.dots.needle.67percent")
-                        .font(.system(size: 14))
+                        .font(.ui(14))
                         .foregroundStyle(.white.opacity(0.85))
                 }
 
                 qualityMenu {
                     Text(qualityTitle)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.ui(12, weight: .medium))
                         .foregroundStyle(.white.opacity(0.9))
                 }
 
                 if !viewModel.audioQualityTitle.isEmpty {
                     Text(viewModel.audioQualityTitle)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.ui(10, weight: .medium))
                         .foregroundStyle(Palette.pink)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -468,7 +468,7 @@ struct PlayerView: View {
 
                 downloadMenu {
                     Image(systemName: "arrow.down.circle")
-                        .font(.system(size: 14))
+                        .font(.ui(14))
                         .foregroundStyle(.white.opacity(0.85))
                 }
             }
@@ -477,7 +477,7 @@ struct PlayerView: View {
                 NSApp.keyWindow?.toggleFullScreen(nil)
             } label: {
                 Image(systemName: "arrow.up.left.and.arrow.down.right")
-                    .font(.system(size: 13))
+                    .font(.ui(13))
                     .foregroundStyle(.white.opacity(0.85))
             }
             .buttonStyle(.plain)
@@ -518,7 +518,7 @@ struct PlayerView: View {
             }
         } label: {
             Text("章节 · \(viewModel.currentChapter?.title ?? "选择")")
-                .font(.system(size: 11, weight: .medium))
+                .font(.ui(11, weight: .medium))
                 .foregroundStyle(.white.opacity(0.9))
                 .lineLimit(1)
                 .fixedSize()
@@ -602,10 +602,10 @@ struct PlayerView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Text("弹幕")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.ui(13, weight: .semibold))
                     .foregroundStyle(Palette.text1)
                 Text("\(viewModel.liveMessages.count)")
-                    .font(.system(size: 11))
+                    .font(.ui(11))
                     .foregroundStyle(Palette.text3)
                 Spacer()
                 HStack(spacing: 5) {
@@ -613,7 +613,7 @@ struct PlayerView: View {
                         .fill(danmakuStatusColor)
                         .frame(width: 6, height: 6)
                     Text(danmakuStatusLabel)
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .foregroundStyle(Palette.text3)
                 }
             }
@@ -629,13 +629,13 @@ struct PlayerView: View {
                     LazyVStack(alignment: .leading, spacing: 7) {
                         if viewModel.liveMessages.isEmpty {
                             Text(danmakuStatusHint)
-                                .font(.system(size: 12))
+                                .font(.ui(12))
                                 .foregroundStyle(Palette.text3)
                                 .padding(.top, 8)
                         } else {
                             ForEach(viewModel.liveMessages) { message in
                                 liveMessageText(message)
-                                    .font(.system(size: 12))
+                                    .font(.ui(12))
                                     .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .id(message.id)
@@ -669,7 +669,7 @@ struct PlayerView: View {
         HStack(spacing: 8) {
             TextField("发送弹幕…", text: $danmakuDraft)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12))
+                .font(.ui(12))
                 .foregroundStyle(Palette.text1)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
@@ -683,7 +683,7 @@ struct PlayerView: View {
                 submitDanmaku()
             } label: {
                 Text(viewModel.isSendingDanmaku ? "发送中" : "发送")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.ui(11, weight: .medium))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 11)
                     .padding(.vertical, 6)
@@ -723,7 +723,7 @@ struct PlayerView: View {
                 Image(systemName: "medal")
                 Text(wornMedalTitle)
             }
-            .font(.system(size: 11))
+            .font(.ui(11))
             .foregroundStyle(viewModel.wornMedalID == nil ? Palette.text3 : Palette.pink)
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -826,7 +826,7 @@ struct PlayerView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Text("相关推荐")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.ui(13, weight: .semibold))
                     .foregroundStyle(Palette.text1)
                 Spacer()
                 if viewModel.isLoadingRelated {
@@ -844,7 +844,7 @@ struct PlayerView: View {
                 LazyVStack(spacing: 0) {
                     if visibleRelatedVideos.isEmpty {
                         Text(viewModel.isLoadingRelated ? "正在加载相关推荐…" : "暂无相关推荐")
-                            .font(.system(size: 12))
+                            .font(.ui(12))
                             .foregroundStyle(Palette.text3)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 24)
@@ -870,7 +870,7 @@ struct PlayerView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text(viewModel.title)
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.ui(20, weight: .semibold))
                     .foregroundStyle(Palette.text1)
                     .textSelection(.enabled)
 
@@ -881,7 +881,7 @@ struct PlayerView: View {
                         Label(Fmt.fullDate(viewModel.pubdate), systemImage: "calendar")
                     }
                 }
-                .font(.system(size: 11))
+                .font(.ui(11))
                 .foregroundStyle(Palette.text3)
 
                 if !viewModel.isLive {
@@ -889,16 +889,16 @@ struct PlayerView: View {
                         AvatarView(url: ImageURL.thumb(viewModel.upFace, width: 96, height: 96), size: 38)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(viewModel.upName.isEmpty ? "哔哩哔哩" : viewModel.upName)
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.ui(13, weight: .medium))
                                 .foregroundStyle(Palette.text1)
                             if let mid = viewModel.upMid {
                                 Text(verbatim: "UID \(mid)")
-                                    .font(.system(size: 11))
+                                    .font(.ui(11))
                                     .foregroundStyle(Palette.text3)
                             }
                             if !viewModel.upLocation.isEmpty {
                                 Text(viewModel.upLocation)
-                                    .font(.system(size: 11))
+                                    .font(.ui(11))
                                     .foregroundStyle(Palette.text3)
                             }
                         }
@@ -908,7 +908,7 @@ struct PlayerView: View {
                                 app.navigate(.space(mid))
                             } label: {
                                 Text("UP 主空间")
-                                    .font(.system(size: 12))
+                                    .font(.ui(12))
                                     .foregroundStyle(Palette.pink)
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 6)
@@ -928,7 +928,7 @@ struct PlayerView: View {
                                     Task { await viewModel.playPage(index: index) }
                                 } label: {
                                     Text("P\(index + 1) \(page.part ?? "")")
-                                        .font(.system(size: 11))
+                                        .font(.ui(11))
                                         .foregroundStyle(index == viewModel.currentPageIndex ? Palette.pink : Palette.text2)
                                         .lineLimit(1)
                                         .padding(.horizontal, 10)
@@ -956,7 +956,7 @@ struct PlayerView: View {
                 if !viewModel.desc.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(viewModel.desc)
-                            .font(.system(size: 12))
+                            .font(.ui(12))
                             .foregroundStyle(Palette.text2)
                             .lineSpacing(3)
                             .lineLimit(showFullDescription ? nil : 4)
@@ -964,7 +964,7 @@ struct PlayerView: View {
                         Button(showFullDescription ? "收起" : "展开更多") {
                             showFullDescription.toggle()
                         }
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .buttonStyle(.plain)
                         .foregroundStyle(Palette.text3)
                     }
@@ -979,7 +979,7 @@ struct PlayerView: View {
                         Image(systemName: "dot.radiowaves.left.and.right")
                             .foregroundStyle(Palette.pink)
                         Text("正在直播中，弹幕与评论请在网页端查看")
-                            .font(.system(size: 12))
+                            .font(.ui(12))
                             .foregroundStyle(Palette.text2)
                     }
                     .padding(12)
@@ -1021,16 +1021,16 @@ struct PlayerView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Text(viewModel.seasonTitle.isEmpty ? "合集" : viewModel.seasonTitle)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.ui(14, weight: .semibold))
                     .foregroundStyle(Palette.text1)
                     .lineLimit(1)
                 Text("(\(currentSeasonIndex)/\(viewModel.seasonEpisodes.count))")
-                    .font(.system(size: 11))
+                    .font(.ui(11))
                     .foregroundStyle(Palette.text3)
                 Spacer()
                 if viewModel.seasonViews > 0 {
                     Label("\(Fmt.count(viewModel.seasonViews)) 播放", systemImage: "play.rectangle")
-                        .font(.system(size: 10))
+                        .font(.ui(10))
                         .foregroundStyle(Palette.text3)
                 }
             }
@@ -1062,11 +1062,11 @@ struct PlayerView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                 VStack(alignment: .leading, spacing: 5) {
                     Text(viewModel.title)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.ui(12, weight: .medium))
                         .foregroundStyle(Palette.text1)
                         .lineLimit(2)
                     Text(viewModel.upName)
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .foregroundStyle(Palette.text3)
                     HStack(spacing: 10) {
                         statLabel("play.rectangle", Fmt.count(viewModel.views))
@@ -1106,9 +1106,9 @@ struct PlayerView: View {
             ShareLink(item: viewModel.shareText) {
                 HStack(spacing: 4) {
                     Image(systemName: "arrowshape.turn.up.right")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.ui(12, weight: .medium))
                     Text("转发")
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .lineLimit(1)
                         .fixedSize()
                 }
@@ -1125,9 +1125,9 @@ struct PlayerView: View {
             feedbackMenu {
                 HStack(spacing: 4) {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.ui(12, weight: .medium))
                     Text("更多")
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .lineLimit(1)
                         .fixedSize()
                 }
@@ -1207,7 +1207,7 @@ struct PlayerView: View {
 
     private func compactIcon(_ icon: String, active: Bool) -> some View {
         Image(systemName: icon)
-            .font(.system(size: 12, weight: .medium))
+            .font(.ui(12, weight: .medium))
             .foregroundStyle(active ? Palette.pink : Palette.text2)
             .frame(width: 32, height: 26)
             .background(active ? Palette.pink.opacity(0.12) : Palette.bg)
@@ -1230,9 +1230,9 @@ struct PlayerView: View {
     private func statLabel(_ icon: String, _ text: String) -> some View {
         HStack(spacing: 3) {
             Image(systemName: icon)
-                .font(.system(size: 9))
+                .font(.ui(9))
             Text(text)
-                .font(.system(size: 10))
+                .font(.ui(10))
         }
         .foregroundStyle(Palette.text3)
     }
@@ -1242,10 +1242,10 @@ struct PlayerView: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.ui(12, weight: .medium))
                 if let count {
                     Text(Fmt.count(count))
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .lineLimit(1)
                         .fixedSize()
                 }
@@ -1276,16 +1276,16 @@ struct PlayerView: View {
             HStack(spacing: 8) {
                 if isCurrent {
                     Image(systemName: "waveform")
-                        .font(.system(size: 10))
+                        .font(.ui(10))
                         .foregroundStyle(Palette.pink)
                 }
                 Text(episode.title ?? episode.arc?.title ?? "第 \(index + 1) 集")
-                    .font(.system(size: 12, weight: isCurrent ? .medium : .regular))
+                    .font(.ui(12, weight: isCurrent ? .medium : .regular))
                     .foregroundStyle(isCurrent ? Palette.pink : Palette.text2)
                     .lineLimit(1)
                 Spacer(minLength: 8)
                 Text(Fmt.duration(episode.arc?.duration ?? episode.page?.duration ?? 0))
-                    .font(.system(size: 11))
+                    .font(.ui(11))
                     .foregroundStyle(Palette.text3)
             }
             .padding(.horizontal, 10)
@@ -1303,10 +1303,10 @@ struct PlayerView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Text("评论")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.ui(15, weight: .semibold))
                     .foregroundStyle(Palette.text1)
                 Text(Fmt.count(viewModel.repliesCount))
-                    .font(.system(size: 11))
+                    .font(.ui(11))
                     .foregroundStyle(Palette.text3)
                 if viewModel.isLoadingComments {
                     ProgressView().controlSize(.mini)
@@ -1322,7 +1322,7 @@ struct PlayerView: View {
 
             if viewModel.comments.isEmpty {
                 Text(viewModel.isLoadingComments ? "正在加载评论…" : "暂无评论")
-                    .font(.system(size: 12))
+                    .font(.ui(12))
                     .foregroundStyle(Palette.text3)
                     .padding(.vertical, 16)
             } else {
@@ -1342,7 +1342,7 @@ struct PlayerView: View {
             VStack(alignment: .leading, spacing: 6) {
                 TextField("发一条友善的评论", text: $commentDraft, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 12))
+                    .font(.ui(12))
                     .foregroundStyle(Palette.text1)
                     .lineLimit(1...4)
                     .padding(.horizontal, 10)
@@ -1355,7 +1355,7 @@ struct PlayerView: View {
                         submitComment()
                     } label: {
                         Text(viewModel.isPostingComment ? "发布中…" : "发布")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.ui(12, weight: .medium))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 5)
@@ -1380,7 +1380,7 @@ struct PlayerView: View {
             Task { await viewModel.setCommentSort(sort) }
         } label: {
             Text(title)
-                .font(.system(size: 11, weight: viewModel.commentSort == sort ? .semibold : .regular))
+                .font(.ui(11, weight: viewModel.commentSort == sort ? .semibold : .regular))
                 .foregroundStyle(viewModel.commentSort == sort ? Palette.text1 : Palette.text3)
         }
         .buttonStyle(.plain)
@@ -1395,19 +1395,19 @@ struct PlayerView: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
                     Text(reply.member?.uname ?? "")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.ui(12, weight: .medium))
                         .foregroundStyle(Palette.text2)
                     Text(Fmt.relativeDate(reply.ctime ?? 0))
-                        .font(.system(size: 10))
+                        .font(.ui(10))
                         .foregroundStyle(Palette.text3)
                     if let location = reply.location {
                         Text(location)
-                            .font(.system(size: 10))
+                            .font(.ui(10))
                             .foregroundStyle(Palette.text3)
                     }
                     if !isChild, viewModel.isMine(reply) {
                         Text("我")
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.ui(9, weight: .semibold))
                             .foregroundStyle(Palette.pink)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
@@ -1418,6 +1418,10 @@ struct PlayerView: View {
                 CommentMessageText(message: reply.content?.message ?? "",
                                    emotes: reply.content?.emote ?? [:],
                                    fontSize: 12,
+                                   atUsers: reply.content?.atUsers ?? [:],
+                                   onOpenUser: { mid in
+                                       app.navigate(.space(mid))
+                                   },
                                    onSaveEmote: { token, url in
                                        saveImage(url, suggestedName: ImageSaver.emoteFileName(token))
                                    })
@@ -1463,7 +1467,7 @@ struct PlayerView: View {
                             Image(systemName: reply.isLiked ? "hand.thumbsup.fill" : "hand.thumbsup")
                             Text((reply.like ?? 0) > 0 ? Fmt.count(reply.like ?? 0) : "赞")
                         }
-                        .font(.system(size: 10))
+                        .font(.ui(10))
                         .foregroundStyle(reply.isLiked ? Palette.pink : Palette.text3)
                     }
                     .buttonStyle(.plain)
@@ -1473,7 +1477,7 @@ struct PlayerView: View {
                         replyDraft = ""
                     } label: {
                         Text("回复")
-                            .font(.system(size: 10))
+                            .font(.ui(10))
                             .foregroundStyle(Palette.text3)
                     }
                     .buttonStyle(.plain)
@@ -1483,7 +1487,7 @@ struct PlayerView: View {
                             deleteComment(reply, root: root)
                         } label: {
                             Text("删除")
-                                .font(.system(size: 10))
+                                .font(.ui(10))
                                 .foregroundStyle(Palette.text3)
                         }
                         .buttonStyle(.plain)
@@ -1497,7 +1501,7 @@ struct PlayerView: View {
                                 Text("\(count) 条回复")
                                 Image(systemName: expandedThreads.contains(rootID) ? "chevron.up" : "chevron.down")
                             }
-                            .font(.system(size: 10))
+                            .font(.ui(10))
                             .foregroundStyle(Palette.text3)
                         }
                         .buttonStyle(.plain)
@@ -1535,7 +1539,7 @@ struct PlayerView: View {
         HStack(spacing: 6) {
             TextField("回复 @\(reply.member?.uname ?? "")", text: $replyDraft)
                 .textFieldStyle(.plain)
-                .font(.system(size: 11))
+                .font(.ui(11))
                 .foregroundStyle(Palette.text1)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
@@ -1546,7 +1550,7 @@ struct PlayerView: View {
                 submitReply(to: reply)
             } label: {
                 Text(viewModel.isPostingComment ? "发送中…" : "发送")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.ui(11, weight: .medium))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
@@ -1562,7 +1566,7 @@ struct PlayerView: View {
                 replyDraft = ""
             } label: {
                 Text("取消")
-                    .font(.system(size: 11))
+                    .font(.ui(11))
                     .foregroundStyle(Palette.text3)
             }
             .buttonStyle(.plain)
@@ -1648,21 +1652,21 @@ private struct RelatedVideoRow: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(video.title)
-                        .font(.system(size: 12))
+                        .font(.ui(12))
                         .foregroundStyle(Palette.text1)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                     Text(video.upName.isEmpty ? "UP主" : video.upName)
-                        .font(.system(size: 10))
+                        .font(.ui(10))
                         .foregroundStyle(Palette.text3)
                         .lineLimit(1)
                     HStack(spacing: 6) {
                         Text("\(Fmt.count(video.views)) 播放")
                         Text(Fmt.duration(video.duration))
                     }
-                    .font(.system(size: 10))
+                    .font(.ui(10))
                     .foregroundStyle(Palette.text3)
                 }
                 .frame(height: 65, alignment: .top)
@@ -1689,7 +1693,7 @@ private struct PlaybackProgressControls: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(Fmt.duration(Int(clock.time)))
-                .font(.system(size: 11, weight: .medium))
+                .font(.ui(11, weight: .medium))
                 .foregroundStyle(.white.opacity(0.9))
                 .monospacedDigit()
 
@@ -1706,7 +1710,7 @@ private struct PlaybackProgressControls: View {
             .overlay { chapterMarks }
 
             Text(Fmt.duration(Int(viewModel.duration)))
-                .font(.system(size: 11, weight: .medium))
+                .font(.ui(11, weight: .medium))
                 .foregroundStyle(.white.opacity(0.9))
                 .monospacedDigit()
         }

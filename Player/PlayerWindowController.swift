@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @MainActor
@@ -13,6 +14,8 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
     private final class PlayerWindow {
         let window: NSWindow
         let viewModel: PlayerViewModel
+        /// 订阅标题变化，切换合集内视频或加载详情后同步窗口标题。
+        var titleCancellable: AnyCancellable?
 
         init(window: NSWindow, viewModel: PlayerViewModel) {
             self.window = window
@@ -199,7 +202,14 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
                                              y: newWindow.frame.origin.y - offset))
         }
 
-        windows.append(PlayerWindow(window: newWindow, viewModel: viewModel))
+        let session = PlayerWindow(window: newWindow, viewModel: viewModel)
+        // 标题随视频切换更新：合集内切换、加载详情后修正标题都会反映到窗口标题栏。
+        session.titleCancellable = viewModel.$title
+            .removeDuplicates()
+            .sink { [weak newWindow] title in
+                newWindow?.title = title.isEmpty ? "哔哩哔哩" : title
+            }
+        windows.append(session)
         activeWindow = newWindow
         newWindow.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

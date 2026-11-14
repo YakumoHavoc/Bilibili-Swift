@@ -21,6 +21,17 @@ struct SettingsView: View {
                         .labelsHidden()
                         .frame(width: 240)
                     }
+                    Divider().overlay(Palette.line)
+                    row("字体大小") {
+                        Picker("", selection: $app.uiFontScale) {
+                            ForEach(UIFontScale.options, id: \.self) { scale in
+                                Text(UIFontScale.title(for: scale)).tag(scale)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .frame(width: 180)
+                    }
                 }
 
                 section("播放") {
@@ -49,7 +60,7 @@ struct SettingsView: View {
                         Slider(value: $app.danmakuOpacity, in: 0.2...1)
                             .frame(width: 200)
                         Text("\(Int(app.danmakuOpacity * 100))%")
-                            .font(.system(size: 11))
+                            .font(.ui(11))
                             .foregroundStyle(Palette.text3)
                             .frame(width: 38, alignment: .trailing)
                     }
@@ -58,7 +69,7 @@ struct SettingsView: View {
                         Slider(value: $app.danmakuFontSize, in: 12...30, step: 1)
                             .frame(width: 200)
                         Text("\(Int(app.danmakuFontSize))")
-                            .font(.system(size: 11))
+                            .font(.ui(11))
                             .foregroundStyle(Palette.text3)
                             .frame(width: 38, alignment: .trailing)
                     }
@@ -90,7 +101,7 @@ struct SettingsView: View {
                 section("关于") {
                     row("版本") {
                         Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
-                            .font(.system(size: 12))
+                            .font(.ui(12))
                             .foregroundStyle(Palette.text3)
                     }
                     Divider().overlay(Palette.line)
@@ -107,7 +118,7 @@ struct SettingsView: View {
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.ui(13, weight: .semibold))
                 .foregroundStyle(Palette.text2)
                 .padding(.bottom, 8)
             VStack(alignment: .leading, spacing: 0) {
@@ -121,7 +132,7 @@ struct SettingsView: View {
     private func row<Trailing: View>(_ title: String, @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack {
             Text(title)
-                .font(.system(size: 13))
+                .font(.ui(13))
                 .foregroundStyle(Palette.text1)
             Spacer()
             trailing()
@@ -136,7 +147,7 @@ struct NoteRow: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11))
+            .font(.ui(11))
             .foregroundStyle(Palette.text3)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)

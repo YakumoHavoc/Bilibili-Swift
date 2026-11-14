@@ -22,7 +22,7 @@ struct PopularView: View {
                                 Image(systemName: "chart.bar.fill")
                                 Text("排行榜")
                             }
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.ui(12, weight: .medium))
                             .foregroundStyle(Palette.pink)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)

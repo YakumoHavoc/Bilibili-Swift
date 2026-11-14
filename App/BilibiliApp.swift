@@ -10,6 +10,7 @@ struct BilibiliApp: App {
             MainView()
                 .environmentObject(app)
                 .frame(minWidth: 980, minHeight: 640)
+                .id(app.uiFontScale)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1320, height: 840)

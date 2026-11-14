@@ -20,7 +20,7 @@ struct TopBarView: View {
 
             HStack(spacing: 6) {
                 Text("bili")
-                    .font(.system(size: 11, weight: .heavy))
+                    .font(.ui(11, weight: .heavy))
                     .foregroundStyle(.white)
                     .frame(width: 26, height: 22)
                     .background(
@@ -29,7 +29,7 @@ struct TopBarView: View {
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                 Text("哔哩哔哩")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.ui(13, weight: .semibold))
                     .foregroundStyle(Palette.text1)
             }
             .padding(.leading, 6)
@@ -66,7 +66,7 @@ struct TopBarView: View {
                     app.showLogin = true
                 } label: {
                     Text("登录")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.ui(12, weight: .medium))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 6)
@@ -95,7 +95,7 @@ struct TopBarView: View {
         HStack(spacing: 7) {
             Button(action: submitSearch) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 12))
+                    .font(.ui(12))
                     .foregroundStyle(Palette.text3)
                     .contentShape(Rectangle())
             }
@@ -103,7 +103,7 @@ struct TopBarView: View {
             .help("搜索")
             TextField("搜索视频、UP主", text: $query)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12))
+                .font(.ui(12))
                 .foregroundStyle(Palette.text1)
                 .focused($searchFocused)
                 .onSubmit {
@@ -114,7 +114,7 @@ struct TopBarView: View {
                     query = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .foregroundStyle(Palette.text3)
                 }
                 .buttonStyle(.plain)

@@ -64,6 +64,14 @@ final class AppState: ObservableObject {
         didSet { UserDefaults.standard.set(danmakuFontSize, forKey: "player.danmakuFontSize") }
     }
 
+    /// 界面字体缩放比例（0.9 / 1.0 / 1.15）。
+    @Published var uiFontScale: Double {
+        didSet {
+            UserDefaults.standard.set(uiFontScale, forKey: "app.uiFontScale")
+            UIFontScale.current = CGFloat(uiFontScale)
+        }
+    }
+
     private var backStack: [Page] = []
 
     init() {
@@ -77,6 +85,9 @@ final class AppState: ObservableObject {
         danmakuOpacity = opacity
         let fontSize = UserDefaults.standard.object(forKey: "player.danmakuFontSize") as? Double ?? 18
         danmakuFontSize = fontSize
+        let scale = UserDefaults.standard.object(forKey: "app.uiFontScale") as? Double ?? 1
+        uiFontScale = scale
+        UIFontScale.current = CGFloat(scale)
     }
 
     func bootstrap() {
@@ -122,6 +133,19 @@ final class AppState: ObservableObject {
         let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         navigate(.search(trimmed))
+    }
+
+    /// 打开用户空间。没有 mid 的 @名字（如私信正文）先按昵称搜索再跳转。
+    func openUser(named name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        Task {
+            guard let mid = await BiliAPI.userMid(named: trimmed) else {
+                showToast("未找到用户 @\(trimmed)")
+                return
+            }
+            navigate(.space(mid))
+        }
     }
 
     func play(video: VideoCard) {

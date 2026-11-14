@@ -25,46 +25,81 @@ struct DanmakuOverlay: View {
 
     var body: some View {
         Canvas { context, size in
-            let laneHeight = fontSize + 7
-            let topInset: CGFloat = 10
             // 阴影对所有弹幕完全一致：整体加一次，避免逐条复制上下文并创建滤镜。
             var shadowed = context
             shadowed.addFilter(.shadow(color: .black.opacity(0.85), radius: 1.2, x: 0, y: 0))
 
-            // 弹幕按时间升序排列，只遍历仍可能显示在屏幕上的那一段（通常几十条）。
-            for entry in items[Self.activeRange(in: items, at: time)] {
-                guard entry.item.time <= time else { break }
-                let elapsed = time - entry.item.time
-
-                let text = entry.item.text
-                let width = DanmakuWidthCache.shared.width(of: text, fontSize: fontSize)
-                let color = Color(nsColor: entry.color).opacity(opacity)
-
-                switch entry.item.mode {
-                case 4, 5:
-                    guard elapsed <= 4.5 else { continue }
-                    let x = (size.width - width) / 2
-                    let y: CGFloat
-                    if entry.item.mode == 5 {
-                        y = topInset + CGFloat(entry.lane) * laneHeight
-                    } else {
-                        y = size.height - 12 - CGFloat(entry.lane + 1) * laneHeight
-                    }
-                    draw(text: text, color: color, in: &shadowed,
-                         at: CGPoint(x: x + width / 2, y: y + fontSize / 2))
-                default:
-                    let stay = Self.stay(for: text.count)
-                    guard elapsed <= stay else { continue }
-                    let travel = size.width + width
-                    let x = size.width - (elapsed / stay) * travel
-                    guard x + width > 0 else { continue }
-                    let y = topInset + CGFloat(entry.lane) * laneHeight
-                    draw(text: text, color: color, in: &shadowed,
-                         at: CGPoint(x: x + width / 2, y: y + fontSize / 2))
-                }
+            for glyph in Self.glyphs(items: items, time: time, size: size, fontSize: fontSize, opacity: opacity) {
+                draw(text: glyph.text, color: glyph.color, in: &shadowed, at: glyph.center)
             }
         }
         .allowsHitTesting(false)
+        .overlay {
+            DanmakuRightClickHandler { point, size in
+                Self.hitTest(point: point, size: size, items: items, time: time, fontSize: fontSize)
+            }
+        }
+    }
+
+    /// 一条弹幕在画布上的位置与样式，绘制与右键命中检测共用同一份布局结果。
+    struct Glyph {
+        let text: String
+        let color: Color
+        let center: CGPoint
+        let width: CGFloat
+    }
+
+    static func glyphs(items: [DanmakuLaneItem], time: Double,
+                       size: CGSize, fontSize: Double, opacity: Double) -> [Glyph] {
+        let laneHeight = fontSize + 7
+        let topInset: CGFloat = 10
+        var result: [Glyph] = []
+        // 弹幕按时间升序排列，只遍历仍可能显示在屏幕上的那一段（通常几十条）。
+        for entry in items[Self.activeRange(in: items, at: time)] {
+            guard entry.item.time <= time else { break }
+            let elapsed = time - entry.item.time
+
+            let text = entry.item.text
+            let width = DanmakuWidthCache.shared.width(of: text, fontSize: fontSize)
+            let color = Color(nsColor: entry.color).opacity(opacity)
+            let center: CGPoint
+
+            switch entry.item.mode {
+            case 4, 5:
+                guard elapsed <= 4.5 else { continue }
+                let x = (size.width - width) / 2
+                let y: CGFloat
+                if entry.item.mode == 5 {
+                    y = topInset + CGFloat(entry.lane) * laneHeight
+                } else {
+                    y = size.height - 12 - CGFloat(entry.lane + 1) * laneHeight
+                }
+                center = CGPoint(x: x + width / 2, y: y + fontSize / 2)
+            default:
+                let stay = Self.stay(for: text.count)
+                guard elapsed <= stay else { continue }
+                let travel = size.width + width
+                let x = size.width - (elapsed / stay) * travel
+                guard x + width > 0 else { continue }
+                let y = topInset + CGFloat(entry.lane) * laneHeight
+                center = CGPoint(x: x + width / 2, y: y + fontSize / 2)
+            }
+            result.append(Glyph(text: text, color: color, center: center, width: width))
+        }
+        return result
+    }
+
+    /// 返回鼠标位置下最上层的弹幕文字。
+    static func hitTest(point: CGPoint, size: CGSize, items: [DanmakuLaneItem],
+                        time: Double, fontSize: Double) -> String? {
+        let height = fontSize * 1.35
+        for glyph in glyphs(items: items, time: time, size: size, fontSize: fontSize, opacity: 1).reversed() {
+            let rect = CGRect(x: glyph.center.x - glyph.width / 2,
+                              y: glyph.center.y - height / 2,
+                              width: glyph.width, height: height)
+            if rect.contains(point) { return glyph.text }
+        }
+        return nil
     }
 
     private func draw(text: String, color: Color,
@@ -93,6 +128,64 @@ struct DanmakuOverlay: View {
 
     static func stay(for count: Int) -> Double {
         min(12.0, 7.0 + Double(count) * 0.12)
+    }
+}
+
+/// 弹幕右键菜单：命中某条弹幕后提供「复制弹幕」。
+private struct DanmakuRightClickHandler: NSViewRepresentable {
+    let lookup: (CGPoint, CGSize) -> String?
+
+    func makeNSView(context: Context) -> CatcherView {
+        let view = CatcherView()
+        view.lookup = lookup
+        return view
+    }
+
+    func updateNSView(_ nsView: CatcherView, context: Context) {
+        nsView.lookup = lookup
+    }
+
+    final class CatcherView: NSView {
+        var lookup: ((CGPoint, CGSize) -> String?)?
+        private var monitor: Any?
+
+        /// 只监听右键，不参与普通点击的命中，避免挡住播放器的点击操作。
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let monitor {
+                NSEvent.removeMonitor(monitor)
+                self.monitor = nil
+            }
+            guard window != nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown]) { [weak self] event in
+                guard let self, event.window === self.window else { return event }
+                return MainActor.assumeIsolated { self.handle(event) }
+            }
+        }
+
+        private func handle(_ event: NSEvent) -> NSEvent? {
+            let point = convert(event.locationInWindow, from: nil)
+            guard bounds.contains(point), let text = lookup?(point, bounds.size) else { return event }
+            let menu = NSMenu()
+            let item = NSMenuItem(title: "复制弹幕", action: #selector(copyDanmaku(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = text
+            menu.addItem(item)
+            NSMenu.popUpContextMenu(menu, with: event, for: self)
+            return nil
+        }
+
+        @objc private func copyDanmaku(_ sender: NSMenuItem) {
+            guard let text = sender.representedObject as? String else { return }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+        }
+
+        deinit {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+        }
     }
 }
 

@@ -21,7 +21,7 @@ struct MainView: View {
                 VStack {
                     Spacer()
                     Text(toast)
-                        .font(.system(size: 13))
+                        .font(.ui(13))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 9)

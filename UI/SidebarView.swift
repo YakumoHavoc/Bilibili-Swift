@@ -60,10 +60,10 @@ struct SidebarView: View {
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: item.icon)
-                    .font(.system(size: 17, weight: .medium))
+                    .font(.ui(17, weight: .medium))
                     .foregroundStyle(selected ? Palette.pink : Palette.text2)
                 Text(item.title)
-                    .font(.system(size: 11))
+                    .font(.ui(11))
                     .foregroundStyle(selected ? Palette.pink : Palette.text2)
             }
             .frame(width: 56, height: 52)
@@ -88,7 +88,7 @@ struct SidebarView: View {
                     AvatarView(url: ImageURL.thumb(user.face, width: 80, height: 80), size: 28)
                 } else {
                     Image(systemName: "person.crop.circle")
-                        .font(.system(size: 20))
+                        .font(.ui(20))
                         .foregroundStyle(Palette.text2)
                 }
             }

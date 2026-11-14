@@ -74,3 +74,28 @@ enum Metrics {
     static let contentPadding: CGFloat = 28
     static let cardRadius: CGFloat = 8
 }
+
+/// 界面字体缩放：设置中可调，所有界面文字统一按此比例缩放。
+enum UIFontScale {
+    /// 可选档位：小、标准、大。
+    static let options: [Double] = [0.9, 1.0, 1.15]
+
+    static var current: CGFloat = 1
+
+    static func title(for value: Double) -> String {
+        switch value {
+        case ..<0.95: return "小"
+        case ..<1.1: return "标准"
+        default: return "大"
+        }
+    }
+}
+
+extension Font {
+    /// 按当前界面缩放比例创建系统字体。
+    static func ui(_ size: CGFloat,
+                   weight: Font.Weight = .regular,
+                   design: Font.Design = .default) -> Font {
+        .system(size: size * UIFontScale.current, weight: weight, design: design)
+    }
+}

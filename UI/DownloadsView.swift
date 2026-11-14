@@ -49,13 +49,13 @@ struct DownloadsView: View {
     private var emptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "arrow.down.circle")
-                .font(.system(size: 34))
+                .font(.ui(34))
                 .foregroundStyle(Palette.text3)
             Text("暂无下载任务")
-                .font(.system(size: 13))
+                .font(.ui(13))
                 .foregroundStyle(Palette.text2)
             Text("在播放器控制栏点击下载按钮即可保存视频")
-                .font(.system(size: 11))
+                .font(.ui(11))
                 .foregroundStyle(Palette.text3)
         }
         .frame(maxWidth: .infinity)
@@ -71,7 +71,7 @@ private struct DownloadRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
             Image(systemName: icon)
-                .font(.system(size: 18, weight: .medium))
+                .font(.ui(18, weight: .medium))
                 .foregroundStyle(iconColor)
                 .frame(width: 38, height: 38)
                 .background(iconColor.opacity(0.1))
@@ -79,13 +79,13 @@ private struct DownloadRow: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(task.title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.ui(13, weight: .medium))
                     .foregroundStyle(Palette.text1)
                     .lineLimit(2)
 
                 HStack(spacing: 8) {
                     Text(task.qualityTitle)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.ui(10, weight: .medium))
                         .foregroundStyle(Palette.blue)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -93,13 +93,13 @@ private struct DownloadRow: View {
                         .clipShape(RoundedRectangle(cornerRadius: 4))
 
                     Text(statusText)
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .foregroundStyle(statusColor)
                         .lineLimit(2)
 
                     if task.state == .finished, task.danmakuCount > 0 {
                         Text("\(task.danmakuCount) 条弹幕")
-                            .font(.system(size: 11))
+                            .font(.ui(11))
                             .foregroundStyle(Palette.text3)
                     }
                 }
@@ -111,7 +111,7 @@ private struct DownloadRow: View {
                         .frame(maxWidth: 360)
                 } else if task.state == .finished, let folder = task.fileURL?.deletingLastPathComponent() {
                     Text(folder.lastPathComponent)
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .foregroundStyle(Palette.text3)
                         .lineLimit(1)
                 }
@@ -122,7 +122,7 @@ private struct DownloadRow: View {
             if task.isActive {
                 Button(action: onCancel) {
                     Text("取消")
-                        .font(.system(size: 12))
+                        .font(.ui(12))
                         .foregroundStyle(Palette.text2)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 5)
@@ -133,7 +133,7 @@ private struct DownloadRow: View {
             } else if task.state == .finished {
                 Button(action: onReveal) {
                     Text("在 Finder 中显示")
-                        .font(.system(size: 12))
+                        .font(.ui(12))
                         .foregroundStyle(Palette.pink)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 5)

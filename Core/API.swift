@@ -602,6 +602,59 @@ enum BiliAPI {
         )
     }
 
+    /// UP 主的合集与系列列表（两者混在同一分页里返回）。
+    static func spaceCollections(mid: Int, page: Int = 1) async throws -> SpaceCollectionData {
+        try await BiliClient.shared.get(
+            "https://api.bilibili.com/x/polymer/web-space/seasons_series_list",
+            params: [
+                "mid": String(mid),
+                "page_num": String(page),
+                "page_size": "20"
+            ],
+            referer: "https://space.bilibili.com/\(mid)/seasons"
+        )
+    }
+
+    /// 合集内的视频列表。
+    static func spaceSeasonArchives(mid: Int, seasonID: Int, page: Int = 1) async throws -> SpaceArchiveData {
+        try await BiliClient.shared.get(
+            "https://api.bilibili.com/x/polymer/web-space/seasons_archives_list",
+            params: [
+                "mid": String(mid),
+                "season_id": String(seasonID),
+                "page_num": String(page),
+                "page_size": "30"
+            ],
+            referer: "https://space.bilibili.com/\(mid)/seasons"
+        )
+    }
+
+    /// 系列内的视频列表（系列仍使用旧接口）。
+    static func spaceSeriesArchives(mid: Int, seriesID: Int, page: Int = 1) async throws -> SpaceArchiveData {
+        try await BiliClient.shared.get(
+            "https://api.bilibili.com/x/series/archives",
+            params: [
+                "mid": String(mid),
+                "series_id": String(seriesID),
+                "pn": String(page),
+                "ps": "30"
+            ],
+            referer: "https://space.bilibili.com/\(mid)/seasons"
+        )
+    }
+
+    /// 按昵称查用户 mid：仅接受昵称完全一致的结果，避免跳到同名的其他人。
+    static func userMid(named name: String) async -> Int? {
+        guard let data = try? await BiliClient.shared.get(
+            "https://api.bilibili.com/x/web-interface/wbi/search/type",
+            params: ["search_type": "bili_user", "keyword": name, "page": "1"],
+            referer: "https://search.bilibili.com/",
+            as: UserSearchData.self
+        ) else { return nil }
+        let target = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return data.result?.first { $0.uname == target }?.mid
+    }
+
     // MARK: - 评论
 
     static func replies(aid: Int, page: Int = 1, sort: Int = 2) async throws -> ReplyData {

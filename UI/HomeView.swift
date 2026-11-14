@@ -46,7 +46,7 @@ struct HomeView: View {
                             }
                     } else {
                         Text("已经到底啦 ~")
-                            .font(.system(size: 12))
+                            .font(.ui(12))
                             .foregroundStyle(Palette.text3)
                             .frame(maxWidth: .infinity)
                             .padding(24)

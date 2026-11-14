@@ -88,7 +88,7 @@ struct LiveView: View {
             Text(isFollowingTab
                  ? (BiliClient.shared.isLoggedIn ? "关注的主播暂未开播" : "登录后查看关注主播的直播")
                  : "暂无直播内容")
-                .font(.system(size: 13))
+                .font(.ui(13))
                 .foregroundStyle(Palette.text3)
 
             if isFollowingTab, !BiliClient.shared.isLoggedIn {
@@ -96,7 +96,7 @@ struct LiveView: View {
                     app.showLogin = true
                 } label: {
                     Text("登录")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.ui(12, weight: .medium))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 6)

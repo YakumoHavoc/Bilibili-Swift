@@ -103,7 +103,7 @@ struct SearchView: View {
 
     private var emptyView: some View {
         Text("没有找到相关内容")
-            .font(.system(size: 13))
+            .font(.ui(13))
             .foregroundStyle(Palette.text3)
             .frame(maxWidth: .infinity)
             .padding(60)
@@ -118,15 +118,15 @@ struct SearchView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 6) {
                         Text(user.uname ?? "")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.ui(14, weight: .medium))
                             .foregroundStyle(Palette.text1)
                         if let verify = user.official_verify, verify.type == 0 {
                             Image(systemName: "checkmark.seal.fill")
-                                .font(.system(size: 11))
+                                .font(.ui(11))
                                 .foregroundStyle(Palette.blue)
                         }
                         Text("Lv\(user.level ?? 0)")
-                            .font(.system(size: 10))
+                            .font(.ui(10))
                             .foregroundStyle(Palette.text3)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
@@ -134,16 +134,16 @@ struct SearchView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 3))
                     }
                     Text(user.usign ?? "")
-                        .font(.system(size: 12))
+                        .font(.ui(12))
                         .foregroundStyle(Palette.text3)
                         .lineLimit(1)
                     Text("\(Fmt.count(user.fans ?? 0)) 粉丝 · \(Fmt.count(user.videos ?? 0)) 投稿")
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .foregroundStyle(Palette.text3)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11))
+                    .font(.ui(11))
                     .foregroundStyle(Palette.text3)
             }
             .padding(12)

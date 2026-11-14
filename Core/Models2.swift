@@ -75,6 +75,16 @@ struct LevelInfo: Decodable {
     let current_level: Int?
 }
 
+/// 按昵称搜索用户（用于把消息里没有 mid 的 @名字 解析成用户空间）。
+struct UserSearchData: Decodable {
+    let result: [UserSearchItem]?
+}
+
+struct UserSearchItem: Decodable {
+    let mid: Int?
+    let uname: String?
+}
+
 // MARK: - 收藏 / 历史 / 稍后再看
 
 struct FavoriteFolderData: Decodable {
@@ -291,6 +301,74 @@ struct DynamicContent: Decodable {
 
 struct DynamicDesc: Decodable {
     let text: String?
+    /// 富文本节点：表情、@用户等都以节点形式给出，纯 text 里只有占位符。
+    let rich_text_nodes: [DynamicRichNode]?
+
+    /// 富文本里的表情占位符（如 "[胡桃Usa收藏集_拱拱]"）→ 表情图片。
+    var emoteMap: [String: ReplyEmote] {
+        var result: [String: ReplyEmote] = [:]
+        for node in rich_text_nodes ?? [] {
+            guard node.type == "RICH_TEXT_NODE_TYPE_EMOJI",
+                  let token = node.emoji?.text ?? node.text,
+                  let url = node.emoji?.icon_url ?? node.emoji?.gif_url,
+                  !url.isEmpty else { continue }
+            var emote = ReplyEmote(url: url)
+            // 动态接口用 type == "3" 标记付费/收藏集表情。
+            emote.isPaid = node.emoji?.type == "3"
+            result[token] = emote
+        }
+        return result
+    }
+
+    /// 富文本里的 @用户：带 @ 的文本 → mid。
+    var atUsers: [String: Int] {
+        var result: [String: Int] = [:]
+        for node in rich_text_nodes ?? [] {
+            guard node.type == "RICH_TEXT_NODE_TYPE_AT",
+                  let text = node.text,
+                  let rid = node.rid,
+                  let mid = Int(rid), mid > 0 else { continue }
+            result[text] = mid
+        }
+        return result
+    }
+}
+
+struct DynamicRichNode: Decodable {
+    let type: String?
+    let text: String?
+    /// @用户时为用户 mid（接口返回字符串）。
+    let rid: String?
+    let emoji: DynamicEmoji?
+
+    private enum CodingKeys: String, CodingKey {
+        case type, text, rid, emoji
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        type = try? container.decodeIfPresent(String.self, forKey: .type)
+        text = try? container.decodeIfPresent(String.self, forKey: .text)
+        if let value = try? container.decodeIfPresent(String.self, forKey: .rid) {
+            rid = value
+        } else if let number = try? container.decodeIfPresent(Int.self, forKey: .rid) {
+            rid = String(number)
+        } else {
+            rid = nil
+        }
+        emoji = try? container.decodeIfPresent(DynamicEmoji.self, forKey: .emoji)
+    }
+}
+
+struct DynamicEmoji: Decodable {
+    /// "3" 表示付费/收藏集表情。
+    let type: String?
+    let size: Int?
+    let package_id: String?
+    let text: String?
+    let icon_url: String?
+    let gif_url: String?
+    let webp_url: String?
 }
 
 struct DynamicMajor: Decodable {
@@ -509,6 +587,71 @@ struct SpaceVideoDTO: Decodable {
     let mid: Int?
 }
 
+// MARK: - UP 主合集 / 系列
+
+struct SpaceCollectionData: Decodable {
+    let items_lists: SpaceCollectionLists?
+}
+
+struct SpaceCollectionLists: Decodable {
+    let page: SpaceCollectionPage?
+    let seasons_list: [SpaceCollection]?
+    let series_list: [SpaceCollection]?
+}
+
+struct SpaceCollectionPage: Decodable {
+    let total: Int?
+}
+
+/// 合集（season）与系列（series）结构一致，只是 id 字段名不同。
+struct SpaceCollection: Decodable, Identifiable {
+    let meta: SpaceCollectionMeta?
+
+    var id: String {
+        if let season = meta?.season_id { return "season-\(season)" }
+        if let series = meta?.series_id { return "series-\(series)" }
+        return UUID().uuidString
+    }
+
+    var isSeason: Bool { meta?.season_id != nil }
+    var title: String { meta?.name ?? "未命名合集" }
+    var cover: String { ImageURL.fix(meta?.cover) }
+    var count: Int { meta?.total ?? 0 }
+}
+
+struct SpaceCollectionMeta: Decodable {
+    let name: String?
+    let cover: String?
+    let total: Int?
+    let season_id: Int?
+    let series_id: Int?
+    let description: String?
+}
+
+struct SpaceArchiveData: Decodable {
+    let archives: [SpaceArchiveDTO]?
+    let page: SpaceArchivePage?
+}
+
+struct SpaceArchivePage: Decodable {
+    let total: Int?
+}
+
+struct SpaceArchiveDTO: Decodable {
+    let aid: Int?
+    let bvid: String?
+    let title: String?
+    let pic: String?
+    let duration: Int?
+    let pubdate: Int?
+    let stat: SpaceArchiveStat?
+}
+
+struct SpaceArchiveStat: Decodable {
+    let view: Int?
+    let danmaku: Int?
+}
+
 // MARK: - 评论
 
 struct ReplyData: Decodable {
@@ -570,10 +713,76 @@ struct ReplyContent: Decodable {
     let emote: [String: ReplyEmote]?
     /// 评论里附带的图片。
     let pictures: [ReplyPicture]?
+    /// 正文里实际 @ 到的用户，用于把 @名字 标蓝并可点击跳转。
+    let members: [ReplyContentMember]?
+
+    /// 带 @ 前缀的用户名 → mid。
+    var atUsers: [String: Int] {
+        var result: [String: Int] = [:]
+        for member in members ?? [] {
+            guard let name = member.uname, !name.isEmpty,
+                  let mid = Int(member.mid ?? ""), mid > 0 else { continue }
+            result["@\(name)"] = mid
+        }
+        return result
+    }
+}
+
+struct ReplyContentMember: Decodable {
+    let mid: String?
+    let uname: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case mid, uname
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let value = try? container.decodeIfPresent(String.self, forKey: .mid) {
+            mid = value
+        } else if let number = try? container.decodeIfPresent(Int.self, forKey: .mid) {
+            mid = String(number)
+        } else {
+            mid = nil
+        }
+        uname = try? container.decodeIfPresent(String.self, forKey: .uname)
+    }
 }
 
 struct ReplyEmote: Decodable {
     let url: String?
+    let gif_url: String?
+    let webp_url: String?
+    /// 3 表示付费/收藏集表情。
+    let type: Int?
+    /// 是否付费表情（动态富文本节点直接标记，评论按 type 判断）。
+    var isPaid = false
+
+    init(url: String?) {
+        self.url = url
+        self.gif_url = nil
+        self.webp_url = nil
+        self.type = nil
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case url, gif_url, webp_url, type
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        url = try? container.decodeIfPresent(String.self, forKey: .url)
+        gif_url = try? container.decodeIfPresent(String.self, forKey: .gif_url)
+        webp_url = try? container.decodeIfPresent(String.self, forKey: .webp_url)
+        if let value = try? container.decodeIfPresent(Int.self, forKey: .type) {
+            type = value
+        } else if let text = try? container.decodeIfPresent(String.self, forKey: .type) {
+            type = Int(text)
+        } else {
+            type = nil
+        }
+        isPaid = type == 3
+    }
 }
 
 /// 表情面板：用于把文本里的 [表情名] 映射到图片地址（私信等不返回 emote 字典的场景）。

@@ -109,7 +109,7 @@ struct RemoteImage: View {
                     .aspectRatio(contentMode: contentMode)
             } else if failed {
                 Image(systemName: "photo")
-                    .font(.system(size: 18))
+                    .font(.ui(18))
                     .foregroundStyle(Palette.text3)
             } else {
                 ProgressView()
@@ -145,7 +145,7 @@ struct AvatarView: View {
                     .scaledToFill()
             } else {
                 Image(systemName: "person.fill")
-                    .font(.system(size: size * 0.45))
+                    .font(.ui(size * 0.45))
                     .foregroundStyle(Palette.text3)
             }
         }
@@ -170,7 +170,7 @@ struct DurationBadge: View {
 
     var body: some View {
         Text(text ?? Fmt.duration(seconds))
-            .font(.system(size: 11, weight: .medium))
+            .font(.ui(11, weight: .medium))
             .foregroundStyle(.white)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
@@ -185,7 +185,7 @@ struct CornerBadge: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11, weight: .medium))
+            .font(.ui(11, weight: .medium))
             .foregroundStyle(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -202,7 +202,7 @@ struct PillTabButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                .font(.ui(13, weight: selected ? .semibold : .regular))
                 .foregroundStyle(selected ? Palette.pink : Palette.text2)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
@@ -223,7 +223,7 @@ struct PlainIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 14, weight: .medium))
+                .font(.ui(14, weight: .medium))
                 .foregroundStyle(hovering ? Palette.pink : Palette.text2)
                 .frame(width: 30, height: 30)
                 .background(hovering ? Palette.hover : Color.clear)
@@ -246,11 +246,11 @@ struct PageHeader<Trailing: View>: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.ui(22, weight: .semibold))
                     .foregroundStyle(Palette.text1)
                 if let subtitle {
                     Text(subtitle)
-                        .font(.system(size: 12))
+                        .font(.ui(12))
                         .foregroundStyle(Palette.text3)
                 }
             }
@@ -276,7 +276,7 @@ struct LoadingStateView: View {
             ProgressView()
                 .controlSize(.large)
             Text(text)
-                .font(.system(size: 13))
+                .font(.ui(13))
                 .foregroundStyle(Palette.text3)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -291,10 +291,10 @@ struct ErrorStateView: View {
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: "wifi.exclamationmark")
-                .font(.system(size: 40))
+                .font(.ui(40))
                 .foregroundStyle(Palette.text3)
             Text(message)
-                .font(.system(size: 13))
+                .font(.ui(13))
                 .foregroundStyle(Palette.text2)
             if let retry {
                 Button("重新加载", action: retry)
@@ -314,16 +314,16 @@ struct LoginPromptView: View {
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "person.crop.circle.badge.questionmark")
-                .font(.system(size: 46))
+                .font(.ui(46))
                 .foregroundStyle(Palette.text3)
             Text(title)
-                .font(.system(size: 14))
+                .font(.ui(14))
                 .foregroundStyle(Palette.text2)
             Button {
                 action()
             } label: {
                 Text("扫码登录")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.ui(13, weight: .medium))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 28)
                     .padding(.vertical, 8)
@@ -374,7 +374,7 @@ struct VideoCardView: View {
                 }
 
             Text(video.title)
-                .font(.system(size: 14, weight: .medium))
+                .font(.ui(14, weight: .medium))
                 .foregroundStyle(Palette.text1)
                 .lineLimit(2, reservesSpace: true)
                 .multilineTextAlignment(.leading)
@@ -382,17 +382,17 @@ struct VideoCardView: View {
 
             HStack(spacing: 6) {
                 Image(systemName: "play.circle")
-                    .font(.system(size: 11))
+                    .font(.ui(11))
                     .foregroundStyle(Palette.text3)
                 Text(video.upName.isEmpty ? "UP主" : video.upName)
-                    .font(.system(size: 12))
+                    .font(.ui(12))
                     .foregroundStyle(Palette.text3)
                     .lineLimit(1)
                 Text("·")
-                    .font(.system(size: 11))
+                    .font(.ui(11))
                     .foregroundStyle(Palette.text3)
                 Text(Fmt.count(video.views))
-                    .font(.system(size: 12))
+                    .font(.ui(12))
                     .foregroundStyle(Palette.text3)
             }
         }
@@ -434,7 +434,7 @@ struct VideoRowView: View {
         HStack(alignment: .top, spacing: 14) {
             if let rank {
                 Text(String(format: "%02d", rank))
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.ui(18, weight: .bold))
                     .foregroundStyle(rank <= 3 ? Palette.pink : Palette.text3)
                     .frame(width: 30, alignment: .leading)
                     .padding(.top, 4)
@@ -450,23 +450,23 @@ struct VideoRowView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(video.title)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.ui(15, weight: .medium))
                     .foregroundStyle(hovering ? Palette.pink : Palette.text1)
                     .lineLimit(2)
                 Spacer(minLength: 0)
                 HStack(spacing: 8) {
                     Text(video.upName)
-                        .font(.system(size: 12))
+                        .font(.ui(12))
                         .foregroundStyle(Palette.text3)
                     Text("\(Fmt.count(video.views)) 播放 · \(Fmt.count(video.danmaku)) 弹幕")
-                        .font(.system(size: 12))
+                        .font(.ui(12))
                         .foregroundStyle(Palette.text3)
                 }
             }
             .padding(.vertical, 2)
             Spacer()
             Text(Fmt.relativeDate(video.pubdate))
-                .font(.system(size: 12))
+                .font(.ui(12))
                 .foregroundStyle(Palette.text3)
         }
         .padding(.vertical, 10)
@@ -510,9 +510,9 @@ struct LiveCardView: View {
                 .overlay(alignment: .topTrailing) {
                     HStack(spacing: 3) {
                         Image(systemName: "flame.fill")
-                            .font(.system(size: 10))
+                            .font(.ui(10))
                         Text(Fmt.count(room.online))
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.ui(11, weight: .medium))
                     }
                     .foregroundStyle(.white)
                     .padding(.horizontal, 6)
@@ -527,11 +527,11 @@ struct LiveCardView: View {
                         .overlay(alignment: .bottomLeading) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(room.title)
-                                    .font(.system(size: 13, weight: .medium))
+                                    .font(.ui(13, weight: .medium))
                                     .foregroundStyle(.white)
                                     .lineLimit(1)
                                 Text("\(room.uname) · \(room.areaName)")
-                                    .font(.system(size: 11))
+                                    .font(.ui(11))
                                     .foregroundStyle(.white.opacity(0.85))
                                     .lineLimit(1)
                             }
@@ -543,12 +543,12 @@ struct LiveCardView: View {
             HStack(spacing: 6) {
                 AvatarView(url: room.face, size: 18)
                 Text(room.uname)
-                    .font(.system(size: 12))
+                    .font(.ui(12))
                     .foregroundStyle(Palette.text2)
                     .lineLimit(1)
                 Spacer()
                 Text(room.parentName)
-                    .font(.system(size: 11))
+                    .font(.ui(11))
                     .foregroundStyle(Palette.text3)
             }
             .padding(.top, 8)
@@ -591,7 +591,7 @@ struct BangumiCardView: View {
                 .overlay(alignment: .topTrailing) {
                     if !item.score.isEmpty {
                         Text(item.score)
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.ui(12, weight: .bold))
                             .foregroundStyle(Palette.pink)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -602,11 +602,11 @@ struct BangumiCardView: View {
                 }
 
             Text(item.title)
-                .font(.system(size: 13, weight: .medium))
+                .font(.ui(13, weight: .medium))
                 .foregroundStyle(Palette.text1)
                 .lineLimit(1)
             Text(item.indexShow.isEmpty ? item.subtitle : item.indexShow)
-                .font(.system(size: 11))
+                .font(.ui(11))
                 .foregroundStyle(Palette.text3)
                 .lineLimit(1)
         }

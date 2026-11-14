@@ -76,10 +76,10 @@ struct MessagesView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "paperplane.fill")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.ui(14, weight: .semibold))
                     .foregroundStyle(Palette.text1)
                 Text("消息中心")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.ui(15, weight: .semibold))
                     .foregroundStyle(Palette.text1)
             }
             .padding(.horizontal, 18)
@@ -97,9 +97,9 @@ struct MessagesView: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "gearshape")
-                        .font(.system(size: 12))
+                        .font(.ui(12))
                     Text("消息设置")
-                        .font(.system(size: 13))
+                        .font(.ui(13))
                     Spacer()
                 }
                 .foregroundStyle(Palette.text2)
@@ -124,12 +124,12 @@ struct MessagesView: View {
                     .fill(selected ? Palette.pink : Palette.text3.opacity(0.45))
                     .frame(width: 5, height: 5)
                 Text(item.title)
-                    .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                    .font(.ui(13, weight: selected ? .semibold : .regular))
                     .foregroundStyle(selected ? Palette.pink : Palette.text2)
                 Spacer()
                 if item == .sessions, totalUnread > 0 {
                     Text(totalUnread > 99 ? "99+" : "\(totalUnread)")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.ui(10, weight: .semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1.5)
@@ -149,7 +149,7 @@ struct MessagesView: View {
     private var header: some View {
         HStack(spacing: 10) {
             Text(category.title)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.ui(16, weight: .semibold))
                 .foregroundStyle(Palette.text1)
             Spacer()
             PlainIconButton(systemName: "arrow.clockwise", action: {
@@ -175,7 +175,7 @@ struct MessagesView: View {
         VStack(spacing: 0) {
             HStack {
                 Text(category.listTitle)
-                    .font(.system(size: 12))
+                    .font(.ui(12))
                     .foregroundStyle(Palette.text2)
                 Spacer()
             }
@@ -220,10 +220,10 @@ struct MessagesView: View {
     private var emptyDetail: some View {
         VStack(spacing: 12) {
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 46, weight: .light))
+                .font(.ui(46, weight: .light))
                 .foregroundStyle(Palette.text3.opacity(0.7))
             Text("快找小伙伴聊天吧")
-                .font(.system(size: 13))
+                .font(.ui(13))
                 .foregroundStyle(Palette.text3)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -233,10 +233,10 @@ struct MessagesView: View {
     private var emptyHint: some View {
         VStack(spacing: 10) {
             Image(systemName: "tray")
-                .font(.system(size: 30, weight: .light))
+                .font(.ui(30, weight: .light))
                 .foregroundStyle(Palette.text3.opacity(0.7))
             Text(category == .system ? "暂无系统通知" : "暂无消息")
-                .font(.system(size: 13))
+                .font(.ui(13))
                 .foregroundStyle(Palette.text3)
         }
     }
@@ -326,12 +326,12 @@ struct MessagesView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(name)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.ui(13, weight: .medium))
                             .foregroundStyle(Palette.text1)
                             .lineLimit(1)
                         Spacer(minLength: 4)
                         Text(Fmt.relativeDate(time))
-                            .font(.system(size: 10))
+                            .font(.ui(10))
                             .foregroundStyle(Palette.text3)
                     }
                     HStack(spacing: 6) {
@@ -346,7 +346,7 @@ struct MessagesView: View {
                         Spacer(minLength: 4)
                         if badge > 0 {
                             Text(badge > 99 ? "99+" : "\(badge)")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(.ui(10, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 1.5)
@@ -372,7 +372,7 @@ struct MessagesView: View {
             HStack(spacing: 10) {
                 AvatarView(url: sessionAvatar(session), size: 26)
                 Text(sessionName(session))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.ui(14, weight: .semibold))
                     .foregroundStyle(Palette.text1)
                 Spacer()
             }
@@ -413,6 +413,9 @@ struct MessagesView: View {
                                        emotes: [:],
                                        fontSize: 12,
                                        color: mine ? .white : Palette.text1,
+                                       onOpenUserName: { name in
+                                           app.openUser(named: name)
+                                       },
                                        onSaveEmote: { token, url in
                                            saveEmote(token: token, url: url)
                                        })
@@ -422,7 +425,7 @@ struct MessagesView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
                 Text(Fmt.relativeDate(message.timestamp ?? 0))
-                    .font(.system(size: 9))
+                    .font(.ui(9))
                     .foregroundStyle(Palette.text3)
             }
             if !mine { Spacer(minLength: 40) }
@@ -462,7 +465,7 @@ struct MessagesView: View {
                     .overlay(alignment: .bottomTrailing) {
                         if video.duration > 0 {
                             Text(Fmt.duration(video.duration))
-                                .font(.system(size: 9, weight: .medium))
+                                .font(.ui(9, weight: .medium))
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 1)
@@ -474,7 +477,7 @@ struct MessagesView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(video.title.isEmpty ? "视频" : video.title)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.ui(12, weight: .medium))
                         .foregroundStyle(Palette.text1)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
@@ -486,7 +489,7 @@ struct MessagesView: View {
                         }
                         Text(Fmt.relativeDate(time))
                     }
-                    .font(.system(size: 10))
+                    .font(.ui(10))
                     .foregroundStyle(Palette.text3)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -508,10 +511,10 @@ struct MessagesView: View {
                 AvatarView(url: feed.avatar, size: 32)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(feed.name)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.ui(13, weight: .semibold))
                         .foregroundStyle(Palette.text1)
                     Text("\(feed.business) · \(Fmt.relativeDate(feed.time))")
-                        .font(.system(size: 10))
+                        .font(.ui(10))
                         .foregroundStyle(Palette.text3)
                 }
                 Spacer()
@@ -520,7 +523,10 @@ struct MessagesView: View {
             CommentMessageText(message: feed.content,
                                emotes: [:],
                                fontSize: 13,
-                               enlargePaidEmotes: true,
+                               paidScale: 4,
+                               onOpenUserName: { name in
+                                   app.openUser(named: name)
+                               },
                                onSaveEmote: { token, url in
                                    saveEmote(token: token, url: url)
                                })
@@ -530,7 +536,7 @@ struct MessagesView: View {
                                    emotes: [:],
                                    fontSize: 12,
                                    color: Palette.text2,
-                                   enlargePaidEmotes: true,
+                                   paidScale: 4,
                                    onSaveEmote: { token, url in
                                        saveEmote(token: token, url: url)
                                    })
@@ -542,7 +548,7 @@ struct MessagesView: View {
                     PlayerWindowController.shared.open(identifier: feed.bvid!, title: feed.title, app: app)
                 } label: {
                     Text("查看原视频")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.ui(12, weight: .medium))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 7)

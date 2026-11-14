@@ -104,7 +104,7 @@ struct FavoriteBrowser: View {
 
     private func emptyText(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 13))
+            .font(.ui(13))
             .foregroundStyle(Palette.text3)
             .frame(maxWidth: .infinity)
             .padding(60)

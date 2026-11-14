@@ -58,7 +58,7 @@ struct BangumiView: View {
             ErrorStateView(message: errorMessage) { Task { await reload() } }
         } else if items.isEmpty {
             Text("暂无番剧")
-                .font(.system(size: 13))
+                .font(.ui(13))
                 .foregroundStyle(Palette.text3)
                 .frame(maxWidth: .infinity)
                 .padding(80)
@@ -186,7 +186,7 @@ struct CinemaView: View {
                     ErrorStateView(message: errorMessage) { Task { await reload() } }
                 } else if items.isEmpty {
                     Text("暂无内容")
-                        .font(.system(size: 13))
+                        .font(.ui(13))
                         .foregroundStyle(Palette.text3)
                         .frame(maxWidth: .infinity)
                         .padding(80)

@@ -103,10 +103,10 @@ struct DynamicView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 Text("正在直播")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.ui(13, weight: .semibold))
                     .foregroundStyle(Palette.text1)
                 Text("\(lives.count)")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.ui(12, weight: .semibold))
                     .foregroundStyle(Palette.pink)
                 Spacer()
                 Button {
@@ -116,7 +116,7 @@ struct DynamicView: View {
                         Text("更多关注")
                         Image(systemName: "chevron.right")
                     }
-                    .font(.system(size: 11))
+                    .font(.ui(11))
                     .foregroundStyle(Palette.text3)
                 }
                 .buttonStyle(.plain)
@@ -137,7 +137,7 @@ struct DynamicView: View {
                                         .frame(width: 56, height: 56)
                                         .clipShape(RoundedRectangle(cornerRadius: 4))
                                     Text("直播中")
-                                        .font(.system(size: 9, weight: .medium))
+                                        .font(.ui(9, weight: .medium))
                                         .foregroundStyle(.white)
                                         .padding(.horizontal, 5)
                                         .padding(.vertical, 1)
@@ -147,16 +147,16 @@ struct DynamicView: View {
                                 }
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(room.name)
-                                        .font(.system(size: 12, weight: .medium))
+                                        .font(.ui(12, weight: .medium))
                                         .foregroundStyle(Palette.text2)
                                         .lineLimit(1)
                                     Text(room.title)
-                                        .font(.system(size: 11))
+                                        .font(.ui(11))
                                         .foregroundStyle(Palette.text3)
                                         .lineLimit(2)
                                         .multilineTextAlignment(.leading)
                                     Text("\(Fmt.count(room.online)) 人气")
-                                        .font(.system(size: 10))
+                                        .font(.ui(10))
                                         .foregroundStyle(Palette.text3)
                                 }
                                 Spacer(minLength: 0)
@@ -225,7 +225,7 @@ struct DynamicView: View {
                             .onAppear { Task { await loadMore() } }
                     } else {
                         Text("没有更多动态了")
-                            .font(.system(size: 12))
+                            .font(.ui(12))
                             .foregroundStyle(Palette.text3)
                             .frame(maxWidth: .infinity)
                             .padding(20)
@@ -271,13 +271,13 @@ struct DynamicView: View {
                         ZStack {
                             Circle().fill(Palette.blue.opacity(0.12))
                             Image(systemName: "circle.hexagongrid.fill")
-                                .font(.system(size: 19, weight: .medium))
+                                .font(.ui(19, weight: .medium))
                                 .foregroundStyle(Palette.blue)
                         }
                         .frame(width: 44, height: 44)
 
                         Text("全部动态")
-                            .font(.system(size: 11))
+                            .font(.ui(11))
                             .foregroundStyle(Palette.blue)
                             .lineLimit(1)
                             .frame(width: 64)
@@ -306,7 +306,7 @@ struct DynamicView: View {
                                 }
 
                             Text(user.name)
-                                .font(.system(size: 11))
+                                .font(.ui(11))
                                 .foregroundStyle(Palette.text2)
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
@@ -340,7 +340,7 @@ struct DynamicView: View {
             }
         } label: {
             Image(systemName: direction < 0 ? "chevron.left" : "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.ui(11, weight: .semibold))
                 .foregroundStyle(Palette.text2)
                 .frame(width: 26, height: 26)
                 .background(.ultraThinMaterial, in: Circle())
@@ -382,7 +382,7 @@ struct DynamicView: View {
                     Image(systemName: "chevron.left")
                     Text("全部动态")
                 }
-                .font(.system(size: 13))
+                .font(.ui(13))
                 .foregroundStyle(Palette.text3)
             }
             .buttonStyle(.plain)
@@ -391,7 +391,7 @@ struct DynamicView: View {
             AvatarView(url: ImageURL.thumb(author.face, width: 64, height: 64), size: 22)
 
             Text(author.name)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.ui(14, weight: .semibold))
                 .foregroundStyle(Palette.text1)
                 .lineLimit(1)
 
@@ -410,7 +410,7 @@ struct DynamicView: View {
                 } label: {
                     VStack(spacing: 6) {
                         Text(tab.title)
-                            .font(.system(size: 14, weight: tab == filter ? .semibold : .regular))
+                            .font(.ui(14, weight: tab == filter ? .semibold : .regular))
                             .foregroundStyle(tab == filter ? Palette.text1 : Palette.text3)
                         Rectangle()
                             .fill(tab == filter ? Palette.pink : Color.clear)
@@ -621,8 +621,8 @@ struct DynamicCardView: View {
             VStack(alignment: .leading, spacing: 9) {
                 header
 
-                if let text = text(for: content) {
-                    descText(text)
+                if let body = dynamicBody(from: content) {
+                    descText(body)
                 }
 
                 if !images(for: content).isEmpty {
@@ -656,10 +656,10 @@ struct DynamicCardView: View {
     private var header: some View {
         HStack(spacing: 8) {
             Text(author?.name ?? "未知用户")
-                .font(.system(size: 13, weight: .medium))
+                .font(.ui(13, weight: .medium))
                 .foregroundStyle(Palette.text2)
             Text(author?.pub_time ?? Fmt.relativeDate(author?.pub_ts ?? 0))
-                .font(.system(size: 11))
+                .font(.ui(11))
                 .foregroundStyle(Palette.text3)
             Spacer()
             Menu {
@@ -674,7 +674,7 @@ struct DynamicCardView: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 12))
+                    .font(.ui(12))
                     .foregroundStyle(Palette.text3)
                     .frame(width: 22, height: 18)
             }
@@ -684,26 +684,23 @@ struct DynamicCardView: View {
         }
     }
 
-    private func descText(_ text: String) -> some View {
+    private func descText(_ body: DynamicBody) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(text)
-                .font(.system(size: 13))
-                .foregroundStyle(Palette.text1)
-                .lineSpacing(4)
+            CommentMessageText(message: body.text,
+                               emotes: body.emotes,
+                               fontSize: 13,
+                               paidScale: 2,
+                               atUsers: body.atUsers,
+                               onOpenUser: onOpenSpace)
                 .lineLimit(expanded ? nil : 6)
-                .fixedSize(horizontal: false, vertical: true)
 
-            if text.count > 120 {
+            if body.text.count > 120 {
                 Button(expanded ? "收起" : "展开") { expanded.toggle() }
-                    .font(.system(size: 12))
+                    .font(.ui(12))
                     .foregroundStyle(Palette.text3)
                     .buttonStyle(.plain)
             }
         }
-    }
-
-    private func text(for content: DynamicContent?) -> String? {
-        dynamicText(from: content)
     }
 
     private func images(for content: DynamicContent?) -> [DynamicImageItem] {
@@ -723,12 +720,12 @@ struct DynamicCardView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                 VStack(alignment: .leading, spacing: 6) {
                     Text(archive.title ?? "")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.ui(13, weight: .medium))
                         .foregroundStyle(Palette.text1)
                         .lineLimit(2)
                     if let play = archive.stat?.play {
                         Text("\(play) 播放")
-                            .font(.system(size: 11))
+                            .font(.ui(11))
                             .foregroundStyle(Palette.text3)
                     }
                 }
@@ -753,12 +750,12 @@ struct DynamicCardView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                 VStack(alignment: .leading, spacing: 6) {
                     Text(article.title ?? "")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.ui(13, weight: .medium))
                         .foregroundStyle(Palette.text1)
                         .lineLimit(2)
                     if let desc = article.desc, !desc.isEmpty {
                         Text(desc)
-                            .font(.system(size: 11))
+                            .font(.ui(11))
                             .foregroundStyle(Palette.text3)
                             .lineLimit(2)
                     }
@@ -784,11 +781,11 @@ struct DynamicCardView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                 VStack(alignment: .leading, spacing: 6) {
                     Text(pgc.title ?? "")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.ui(13, weight: .medium))
                         .foregroundStyle(Palette.text1)
                         .lineLimit(2)
                     Text("番剧")
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .foregroundStyle(Palette.text3)
                 }
                 Spacer()
@@ -819,7 +816,7 @@ struct DynamicCardView: View {
                         .frame(width: 132, height: 82)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                     Text(isLiving ? "直播中" : "未开播")
-                        .font(.system(size: 9, weight: .medium))
+                        .font(.ui(9, weight: .medium))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
@@ -829,16 +826,16 @@ struct DynamicCardView: View {
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Text(info.title ?? "")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.ui(13, weight: .medium))
                         .foregroundStyle(Palette.text1)
                         .lineLimit(2)
                     if !area.isEmpty {
                         Text(area)
-                            .font(.system(size: 11))
+                            .font(.ui(11))
                             .foregroundStyle(Palette.text3)
                     }
                     Text("\(Fmt.count(info.online ?? 0)) 人气")
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .foregroundStyle(Palette.text3)
                 }
                 Spacer()
@@ -861,21 +858,23 @@ struct DynamicCardView: View {
             HStack(spacing: 6) {
                 AvatarView(url: ImageURL.thumb(origAuthor?.face, width: 64, height: 64), size: 18)
                 Text(origAuthor?.name ?? "")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.ui(12, weight: .medium))
                     .foregroundStyle(Palette.text2)
                 Text(origAuthor?.pub_time ?? "")
-                    .font(.system(size: 10))
+                    .font(.ui(10))
                     .foregroundStyle(Palette.text3)
                 Spacer()
             }
 
-            if let text = text(for: origContent) {
-                Text(text)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Palette.text2)
-                    .lineSpacing(3)
+            if let body = dynamicBody(from: origContent) {
+                CommentMessageText(message: body.text,
+                                   emotes: body.emotes,
+                                   fontSize: 12,
+                                   color: Palette.text2,
+                                   paidScale: 2,
+                                   atUsers: body.atUsers,
+                                   onOpenUser: onOpenSpace)
                     .lineLimit(expanded ? nil : 6)
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if !images(for: origContent).isEmpty {
@@ -923,7 +922,7 @@ struct DynamicCardView: View {
                 Text(item.modules?.module_stat?.like?.count.map(Fmt.count) ?? "")
             }
         }
-        .font(.system(size: 11))
+        .font(.ui(11))
         .foregroundStyle(Palette.text3)
         .padding(.top, 2)
     }
@@ -987,9 +986,21 @@ struct DynamicImageGallery: View {
     }
 }
 
-private func dynamicText(from content: DynamicContent?) -> String? {
-    if let text = content?.desc?.text, !text.isEmpty { return text }
-    if let text = content?.major?.opus?.summary?.text, !text.isEmpty { return text }
+/// 动态正文：文本 + 表情 + @用户，统一从富文本节点里取，保证收藏集表情能显示。
+struct DynamicBody {
+    let text: String
+    let emotes: [String: ReplyEmote]
+    let atUsers: [String: Int]
+}
+
+private func dynamicBody(from content: DynamicContent?) -> DynamicBody? {
+    if let desc = content?.desc, let text = desc.text, !text.isEmpty {
+        return DynamicBody(text: text, emotes: desc.emoteMap, atUsers: desc.atUsers)
+    }
+    if let summary = content?.major?.opus?.summary,
+       let text = summary.text, !text.isEmpty {
+        return DynamicBody(text: text, emotes: summary.emoteMap, atUsers: summary.atUsers)
+    }
     return nil
 }
 
@@ -1046,6 +1057,7 @@ struct DynamicDetailTarget: Identifiable {
 struct DynamicDetailSheet: View {
     let target: DynamicDetailTarget
 
+    @EnvironmentObject private var app: AppState
     @Environment(\.dismiss) private var dismiss
     @State private var viewer: ImageViewerPayload?
     @State private var total = 0
@@ -1054,14 +1066,14 @@ struct DynamicDetailSheet: View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Text("动态详情")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.ui(15, weight: .semibold))
                     .foregroundStyle(Palette.text1)
                 Spacer()
                 Button {
                     dismiss()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.ui(12, weight: .medium))
                         .foregroundStyle(Palette.text3)
                         .frame(width: 24, height: 24)
                         .contentShape(Rectangle())
@@ -1079,13 +1091,13 @@ struct DynamicDetailSheet: View {
                 VStack(alignment: .leading, spacing: 14) {
                     authorRow
 
-                    if let text = dynamicText(from: target.content) {
-                        Text(text)
-                            .font(.system(size: 14))
-                            .foregroundStyle(Palette.text1)
-                            .lineSpacing(5)
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
+                    if let body = dynamicBody(from: target.content) {
+                        CommentMessageText(message: body.text,
+                                           emotes: body.emotes,
+                                           fontSize: 14,
+                                           paidScale: 2,
+                                           atUsers: body.atUsers,
+                                           onOpenUser: openUser)
                     }
 
                     let images = dynamicImages(from: target.content)
@@ -1101,11 +1113,11 @@ struct DynamicDetailSheet: View {
 
                     HStack(spacing: 6) {
                         Text("评论")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.ui(14, weight: .semibold))
                             .foregroundStyle(Palette.text1)
                         if total > 0 {
                             Text(Fmt.count(total))
-                                .font(.system(size: 12))
+                                .font(.ui(12))
                                 .foregroundStyle(Palette.text3)
                         }
                     }
@@ -1127,15 +1139,20 @@ struct DynamicDetailSheet: View {
         }
     }
 
+    private func openUser(_ mid: Int) {
+        dismiss()
+        app.navigate(.space(mid))
+    }
+
     private var authorRow: some View {
         HStack(spacing: 10) {
             AvatarView(url: ImageURL.thumb(target.author?.face, width: 96, height: 96), size: 40)
             VStack(alignment: .leading, spacing: 3) {
                 Text(target.author?.name ?? "未知用户")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.ui(13, weight: .medium))
                     .foregroundStyle(Palette.text2)
                 Text(target.author?.pub_time ?? Fmt.relativeDate(target.author?.pub_ts ?? 0))
-                    .font(.system(size: 11))
+                    .font(.ui(11))
                     .foregroundStyle(Palette.text3)
             }
             Spacer(minLength: 0)
@@ -1160,11 +1177,11 @@ struct DynamicCommentsSheet: View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("评论")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.ui(15, weight: .semibold))
                     .foregroundStyle(Palette.text1)
                 if total > 0 {
                     Text(Fmt.count(total))
-                        .font(.system(size: 12))
+                        .font(.ui(12))
                         .foregroundStyle(Palette.text3)
                 }
                 Spacer()
@@ -1172,7 +1189,7 @@ struct DynamicCommentsSheet: View {
                     dismiss()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.ui(12, weight: .medium))
                         .foregroundStyle(Palette.text3)
                         .frame(width: 24, height: 24)
                         .contentShape(Rectangle())
@@ -1208,6 +1225,8 @@ struct DynamicCommentList: View {
     /// true 表示不自带滚动容器，由外层 ScrollView 滚动。
     let embedded: Bool
 
+    @EnvironmentObject private var app: AppState
+    @Environment(\.dismiss) private var dismiss
     @State private var replies: [Reply] = []
     @State private var page = 1
     @State private var hasMore = true
@@ -1236,7 +1255,7 @@ struct DynamicCommentList: View {
             VStack(spacing: 8) {
                 ProgressView().controlSize(.small)
                 Text("正在加载评论…")
-                    .font(.system(size: 12))
+                    .font(.ui(12))
                     .foregroundStyle(Palette.text3)
             }
             .frame(maxWidth: .infinity)
@@ -1244,7 +1263,7 @@ struct DynamicCommentList: View {
         } else if let errorMessage, replies.isEmpty {
             VStack(spacing: 10) {
                 Text(errorMessage)
-                    .font(.system(size: 12))
+                    .font(.ui(12))
                     .foregroundStyle(Palette.text3)
                 Button("重试") { Task { await load(reset: true) } }
             }
@@ -1252,7 +1271,7 @@ struct DynamicCommentList: View {
             .padding(.vertical, 40)
         } else if replies.isEmpty {
             Text("暂无评论")
-                .font(.system(size: 12))
+                .font(.ui(12))
                 .foregroundStyle(Palette.text3)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
@@ -1260,7 +1279,7 @@ struct DynamicCommentList: View {
             LazyVStack(alignment: .leading, spacing: 18) {
                 if let note {
                     Text(note)
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .foregroundStyle(Palette.text3)
                 }
                 ForEach(replies) { reply in
@@ -1275,7 +1294,7 @@ struct DynamicCommentList: View {
                         .onAppear { Task { await load(reset: false) } }
                 } else {
                     Text("没有更多评论了")
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .foregroundStyle(Palette.text3)
                         .frame(maxWidth: .infinity)
                 }
@@ -1290,20 +1309,26 @@ struct DynamicCommentList: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
                     Text(reply.member?.uname ?? "匿名用户")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.ui(12, weight: .medium))
                         .foregroundStyle(Palette.text2)
                     Text(Fmt.relativeDate(reply.ctime ?? 0))
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .foregroundStyle(Palette.text3)
                     if let location = reply.location {
                         Text(location)
-                            .font(.system(size: 11))
+                            .font(.ui(11))
                             .foregroundStyle(Palette.text3)
                     }
                 }
                 if let content = reply.content {
                     CommentMessageText(message: content.message ?? "",
-                                       emotes: content.emote ?? [:])
+                                       emotes: content.emote ?? [:],
+                                       paidScale: 2,
+                                       atUsers: content.atUsers,
+                                       onOpenUser: { mid in
+                                           dismiss()
+                                           app.navigate(.space(mid))
+                                       })
 
                     if let pictures = content.pictures, !pictures.isEmpty {
                         let urls = pictures.compactMap { ImageURL.fix($0.img_src) }
@@ -1330,7 +1355,7 @@ struct DynamicCommentList: View {
                         Image(systemName: "hand.thumbsup")
                         Text(Fmt.count(like))
                     }
-                    .font(.system(size: 10))
+                    .font(.ui(10))
                     .foregroundStyle(Palette.text3)
                 }
             }
@@ -1385,35 +1410,72 @@ struct CommentMessageText: View {
     let emotes: [String: ReplyEmote]
     var fontSize: CGFloat = 13
     var color: Color = Palette.text1
-    /// 付费表情是否放大展示：仅消息详情等适合大图的位置开启。
-    var enlargePaidEmotes = false
+    /// 付费表情的放大倍数：普通列表 1 倍，动态/动态评论 2 倍，消息详情 4 倍。
+    var paidScale: CGFloat = 1
+    /// 正文里 @ 到的用户：带 @ 的用户名 → mid。
+    var atUsers: [String: Int] = [:]
+    /// 点击 @用户 的回调（有 mid 时）。
+    var onOpenUser: ((Int) -> Void)?
+    /// 只有名字没有 mid 时的兜底（如私信正文）。
+    var onOpenUserName: ((String) -> Void)?
     /// 右键另存表情：参数为表情占位符与图片地址。
     var onSaveEmote: ((String, String) -> Void)?
 
     @State private var images: [String: NSImage] = [:]
+    /// 原始尺寸表情，用于复制时不损失清晰度。
+    @State private var rawImages: [String: NSImage] = [:]
     @State private var emoteURLs: [String: String] = [:]
+
+    private static let atDelimiters = Set<Character>(
+        " \t\n\r@[]，。！？、；：,.!?;:）)】」》…"
+    )
 
     var body: some View {
         text
-            .font(.system(size: fontSize))
-            .foregroundStyle(color)
+            .font(.ui(fontSize))
             .lineSpacing(3)
             .fixedSize(horizontal: false, vertical: true)
-            .task(id: message) { await loadEmotes() }
-            .contextMenu {
-                if let onSaveEmote {
-                    ForEach(emoteURLs.sorted { $0.key < $1.key }, id: \.key) { item in
-                        Button("存储表情 \(item.key)…") {
-                            onSaveEmote(item.key, item.value)
-                        }
-                    }
+            .textSelection(.enabled)
+            .environment(\.openURL, OpenURLAction { url in
+                guard url.scheme == "bili" else { return .systemAction }
+                if url.host == "space", let mid = Int(url.lastPathComponent) {
+                    onOpenUser?(mid)
+                    return .handled
                 }
+                if url.host == "user",
+                   let name = url.pathComponents.last?.removingPercentEncoding,
+                   !name.isEmpty {
+                    onOpenUserName?(name)
+                    return .handled
+                }
+                return .handled
+            })
+            .task(id: message) { await loadEmotes() }
+            // 文本开启选择后系统会接管右键菜单，这里用透明 NSView 覆盖层接管右键，
+            // 保证表情的「复制 / 存储」入口始终可用（左键仍然透传给文本）。
+            .overlay {
+                RightClickMenuOverlay { menuEntries }
             }
     }
 
-    /// 把 [表情名] 替换成等比缩放的图片，其余文本原样拼接，保留自动换行。
+    /// 右键菜单项：复制文字 + 每个表情的复制/另存。
+    private var menuEntries: [EmoteMenuEntry] {
+        var items = [EmoteMenuEntry(title: "复制文字") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(message, forType: .string)
+        }]
+        for token in emoteURLs.keys.sorted() {
+            items.append(EmoteMenuEntry(title: "复制表情 \(token)") { copyEmote(token) })
+            items.append(EmoteMenuEntry(title: "存储表情 \(token)…") { saveEmote(token) })
+        }
+        return items
+    }
+
+    /// 把 [表情名] 替换成等比缩放的图片，@用户 渲染成可点击的蓝色文本，其余原样拼接。
     private var text: Text {
-        guard !images.isEmpty else { return Text(message) }
+        guard !images.isEmpty || hasAtMentions else {
+            return Text(message).foregroundColor(color)
+        }
 
         var result = Text(verbatim: "")
         var buffer = ""
@@ -1421,7 +1483,9 @@ struct CommentMessageText: View {
 
         func flush() {
             guard !buffer.isEmpty else { return }
-            result = result + Text(buffer)
+            var attr = AttributedString(buffer)
+            attr.foregroundColor = color
+            result = result + Text(attr)
             buffer = ""
         }
 
@@ -1436,11 +1500,64 @@ struct CommentMessageText: View {
                     continue
                 }
             }
+
+            if message[index] == "@", let hit = atMatch(at: index) {
+                flush()
+                result = result + Text(atText(hit.text, mid: hit.mid))
+                index = hit.end
+                continue
+            }
+
             buffer.append(message[index])
             index = message.index(after: index)
         }
         flush()
         return result
+    }
+
+    /// 是否存在需要处理的 @用户。
+    private var hasAtMentions: Bool {
+        !atUsers.isEmpty || onOpenUserName != nil
+    }
+
+    /// 带 @ 的用户名，按长度倒序，避免短名字抢先匹配长名字的前缀。
+    private var sortedAtKeys: [String] {
+        atUsers.keys.sorted { $0.count > $1.count }
+    }
+
+    private func atMatch(at index: String.Index) -> (text: String, mid: Int?, end: String.Index)? {
+        let remainder = message[index...]
+        if onOpenUser != nil {
+            for key in sortedAtKeys where remainder.hasPrefix(key) {
+                let end = message.index(index, offsetBy: key.count)
+                return (key, atUsers[key], end)
+            }
+        }
+
+        // 接口没给出 mid 时，按 @名字 切出昵称交给上层去搜索。
+        guard onOpenUserName != nil else { return nil }
+        var end = message.index(after: index)
+        while end < message.endIndex, !Self.atDelimiters.contains(message[end]) {
+            end = message.index(after: end)
+        }
+        let name = String(message[message.index(after: index)..<end])
+        guard !name.isEmpty else { return nil }
+        return ("@" + name, nil, end)
+    }
+
+    private func atText(_ text: String, mid: Int?) -> AttributedString {
+        var attr = AttributedString(text)
+        attr.foregroundColor = Palette.blue
+        if let mid {
+            attr.link = URL(string: "bili://space/\(mid)")
+        } else {
+            var components = URLComponents()
+            components.scheme = "bili"
+            components.host = "user"
+            components.path = "/" + String(text.dropFirst())
+            attr.link = components.url
+        }
+        return attr
     }
 
     /// 文本里出现的表情占位符（如 [doge]）。
@@ -1464,28 +1581,67 @@ struct CommentMessageText: View {
         let found = Array(Set(tokens))
         guard !found.isEmpty else {
             images = [:]
+            rawImages = [:]
             emoteURLs = [:]
             return
         }
         var loaded: [String: NSImage] = [:]
+        var originals: [String: NSImage] = [:]
         var urls: [String: String] = [:]
         for token in found {
             // 评论接口自带表情字典，私信等场景回退到全局表情面板。
+            let apiEmote = emotes[token]
             let info = await EmoteStore.shared.info(for: token)
-            let raw = emotes[token]?.url ?? info?.url
+            let raw = apiEmote?.url ?? info?.url
             let url = ImageURL.fix(raw)
             guard !url.isEmpty, let image = await ImageLoader.shared.load(url) else { continue }
-            // 付费表情仅在详情等位置按 4 倍尺寸展示，列表与评论保持普通尺寸。
-            let side: CGFloat = (enlargePaidEmotes && (info?.isPaid ?? false)) ? 72 : 18
-            loaded[token] = Self.scaled(image, side: side)
+            // 付费表情按上下文放大：动态/动态评论 2 倍，消息详情 4 倍，其余保持普通尺寸。
+            let isPaid = apiEmote?.isPaid == true || (info?.isPaid ?? false)
+            let side: CGFloat = isPaid ? 18 * max(paidScale, 1) : 18
+            originals[token] = image
+            loaded[token] = Self.scaled(image, height: side)
             urls[token] = url
         }
         images = loaded
+        rawImages = originals
         emoteURLs = urls
     }
 
-    private static func scaled(_ image: NSImage, side: CGFloat) -> NSImage {
-        let size = NSSize(width: side, height: side)
+    /// 复制表情图片到剪贴板（使用原始尺寸）。
+    private func copyEmote(_ token: String) {
+        guard let image = rawImages[token] else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([image])
+    }
+
+    /// 另存表情：外部传了回调就走回调，否则弹系统保存面板。
+    private func saveEmote(_ token: String) {
+        guard let url = emoteURLs[token] else { return }
+        if let onSaveEmote {
+            onSaveEmote(token, url)
+            return
+        }
+        Task {
+            _ = await ImageSaver.save(urlString: url,
+                                      suggestedName: ImageSaver.emoteFileName(token))
+        }
+    }
+
+    /// 按高度缩放并保持原始宽高比：收藏集表情常为横图，压成正方形会变形。
+    private static func scaled(_ image: NSImage, height: CGFloat) -> NSImage {
+        let source = image.size
+        guard source.width > 1, source.height > 1 else {
+            let size = NSSize(width: height, height: height)
+            let resized = NSImage(size: size)
+            resized.lockFocus()
+            image.draw(in: NSRect(origin: .zero, size: size))
+            resized.unlockFocus()
+            return resized
+        }
+        let ratio = source.width / source.height
+        // 限制最大宽度，避免超宽表情撑破排版。
+        let width = max(height, min(height * ratio, height * 3))
+        let size = NSSize(width: width.rounded(), height: height)
         let resized = NSImage(size: size)
         resized.lockFocus()
         image.draw(in: NSRect(origin: .zero, size: size))
@@ -1494,7 +1650,77 @@ struct CommentMessageText: View {
     }
 }
 
-// MARK: - 原图查看
+// MARK: - 右键菜单覆盖层
+
+/// 单个右键菜单项。
+struct EmoteMenuEntry {
+    let title: String
+    let action: () -> Void
+}
+
+/// 透明覆盖层：只接管右键（或 Control+左键），其余鼠标事件全部透传给文本，
+/// 这样即使文本开启了选择，也能稳定弹出表情复制/另存菜单。
+private struct RightClickMenuOverlay: NSViewRepresentable {
+    let entries: () -> [EmoteMenuEntry]
+
+    func makeNSView(context: Context) -> RightClickMenuHostView {
+        let view = RightClickMenuHostView()
+        view.entries = entries
+        return view
+    }
+
+    func updateNSView(_ nsView: RightClickMenuHostView, context: Context) {
+        nsView.entries = entries
+    }
+}
+
+final class RightClickMenuHostView: NSView {
+    var entries: (() -> [EmoteMenuEntry])?
+    private var actions: [() -> Void] = []
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard let event = NSApp.currentEvent else { return nil }
+        if event.type == .rightMouseDown || event.type == .rightMouseUp {
+            return self
+        }
+        if event.type == .leftMouseDown, event.modifierFlags.contains(.control) {
+            return self
+        }
+        return nil
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        presentMenu(with: event)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard event.modifierFlags.contains(.control) else {
+            super.mouseDown(with: event)
+            return
+        }
+        presentMenu(with: event)
+    }
+
+    private func presentMenu(with event: NSEvent) {
+        guard let items = entries?(), !items.isEmpty else { return }
+        actions = items.map(\.action)
+        let menu = NSMenu()
+        for (index, entry) in items.enumerated() {
+            let item = NSMenuItem(title: entry.title,
+                                  action: #selector(performItem(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.tag = index
+            menu.addItem(item)
+        }
+        NSMenu.popUpContextMenu(menu, with: event, for: self)
+    }
+
+    @objc private func performItem(_ sender: NSMenuItem) {
+        guard sender.tag >= 0, sender.tag < actions.count else { return }
+        actions[sender.tag]()
+    }
+}
 
 struct ImageViewerPayload: Identifiable {
     let id = UUID()
@@ -1531,14 +1757,14 @@ struct ImageViewerSheet: View {
             VStack {
                 HStack {
                     Text(images.isEmpty ? "" : "\(index + 1) / \(images.count)")
-                        .font(.system(size: 12))
+                        .font(.ui(12))
                         .foregroundStyle(.white.opacity(0.85))
                     Spacer()
                     Button {
                         dismiss()
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.ui(12, weight: .semibold))
                             .foregroundStyle(.white)
                             .frame(width: 28, height: 28)
                             .background(Color.white.opacity(0.14))
@@ -1586,7 +1812,7 @@ struct ImageViewerSheet: View {
 
     private func chevron(_ name: String) -> some View {
         Image(systemName: name)
-            .font(.system(size: 15, weight: .semibold))
+            .font(.ui(15, weight: .semibold))
             .foregroundStyle(.white)
             .frame(width: 34, height: 34)
             .background(Color.white.opacity(0.14))

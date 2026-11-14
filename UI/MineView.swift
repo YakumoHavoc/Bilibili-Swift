@@ -131,15 +131,15 @@ struct MineView: View {
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(item.title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.ui(14, weight: .medium))
                     .foregroundStyle(Palette.text1)
                     .lineLimit(2)
                 Text(item.upName)
-                    .font(.system(size: 12))
+                    .font(.ui(12))
                     .foregroundStyle(Palette.text3)
                 Spacer(minLength: 0)
                 Text("\(Fmt.relativeDate(item.viewAt)) 看过 · \(Fmt.duration(item.progress))")
-                    .font(.system(size: 11))
+                    .font(.ui(11))
                     .foregroundStyle(Palette.text3)
             }
             .padding(.vertical, 2)
@@ -186,7 +186,7 @@ struct MineView: View {
 
     private func emptyText(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 13))
+            .font(.ui(13))
             .foregroundStyle(Palette.text3)
             .frame(maxWidth: .infinity)
             .padding(60)

@@ -8,7 +8,7 @@ struct LoginSheet: View {
     var body: some View {
         VStack(spacing: 18) {
             Text("扫码登录")
-                .font(.system(size: 18, weight: .semibold))
+                .font(.ui(18, weight: .semibold))
                 .foregroundStyle(Palette.text1)
 
             ZStack {
@@ -24,7 +24,7 @@ struct LoginSheet: View {
                     ProgressView()
                 } else {
                     Image(systemName: "qrcode")
-                        .font(.system(size: 70))
+                        .font(.ui(70))
                         .foregroundStyle(Color.gray)
                 }
 
@@ -40,7 +40,7 @@ struct LoginSheet: View {
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Palette.line, lineWidth: 1))
 
             Text(statusText)
-                .font(.system(size: 12))
+                .font(.ui(12))
                 .foregroundStyle(Palette.text2)
                 .multilineTextAlignment(.center)
                 .frame(height: 32)
@@ -56,7 +56,7 @@ struct LoginSheet: View {
             }
 
             Text("打开哔哩哔哩手机客户端，使用扫一扫登录")
-                .font(.system(size: 11))
+                .font(.ui(11))
                 .foregroundStyle(Palette.text3)
         }
         .padding(28)
@@ -97,9 +97,9 @@ struct LoginSheet: View {
             Color.black.opacity(0.55)
             VStack(spacing: 8) {
                 Image(systemName: "qrcode.viewfinder")
-                    .font(.system(size: 26))
+                    .font(.ui(26))
                 Text(text)
-                    .font(.system(size: 11))
+                    .font(.ui(11))
                     .multilineTextAlignment(.center)
             }
             .foregroundStyle(.white)

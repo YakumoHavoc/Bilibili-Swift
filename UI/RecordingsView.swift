@@ -63,7 +63,7 @@ struct RecordingsView: View {
         ForEach(recorder.activeSessions) { session in
             HStack(spacing: 14) {
                 Image(systemName: "record.circle")
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.ui(18, weight: .medium))
                     .foregroundStyle(Palette.pink)
                     .frame(width: 38, height: 38)
                     .background(Palette.pink.opacity(0.1))
@@ -71,11 +71,11 @@ struct RecordingsView: View {
 
                 VStack(alignment: .leading, spacing: 5) {
                     Text(session.title.isEmpty ? "正在录制" : session.title)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.ui(13, weight: .medium))
                         .foregroundStyle(Palette.text1)
                         .lineLimit(1)
                     Text("正在录制 · 已录制 \(Fmt.duration(Int(recorder.elapsed(for: session.id))))")
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .foregroundStyle(Palette.text3)
                 }
 
@@ -91,13 +91,13 @@ struct RecordingsView: View {
     private var emptyState: some View {
         VStack(spacing: 10) {
             Image(systemName: "record.circle")
-                .font(.system(size: 34))
+                .font(.ui(34))
                 .foregroundStyle(Palette.text3)
             Text("暂无直播录制")
-                .font(.system(size: 13))
+                .font(.ui(13))
                 .foregroundStyle(Palette.text2)
             Text("在直播播放器控制栏点击录制按钮即可开始录制")
-                .font(.system(size: 11))
+                .font(.ui(11))
                 .foregroundStyle(Palette.text3)
         }
         .frame(maxWidth: .infinity)
@@ -114,7 +114,7 @@ private struct RecordingRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
             Image(systemName: "record.circle")
-                .font(.system(size: 18, weight: .medium))
+                .font(.ui(18, weight: .medium))
                 .foregroundStyle(Palette.pink)
                 .frame(width: 38, height: 38)
                 .background(Palette.pink.opacity(0.1))
@@ -122,14 +122,14 @@ private struct RecordingRow: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(recording.title.isEmpty ? "直播录制" : recording.title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.ui(13, weight: .medium))
                     .foregroundStyle(Palette.text1)
                     .lineLimit(2)
 
                 HStack(spacing: 8) {
                     if recording.duration > 0 {
                         Text(Fmt.duration(Int(recording.duration)))
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.ui(10, weight: .medium))
                             .foregroundStyle(Palette.pink)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -138,11 +138,11 @@ private struct RecordingRow: View {
                     }
 
                     Text(Fmt.relativeDate(Int(recording.createdAt.timeIntervalSince1970)))
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .foregroundStyle(Palette.text3)
 
                     Text("\(recording.danmakuCount) 条弹幕")
-                        .font(.system(size: 11))
+                        .font(.ui(11))
                         .foregroundStyle(Palette.text3)
                 }
             }
@@ -151,7 +151,7 @@ private struct RecordingRow: View {
 
             Button(action: onPlay) {
                 Text("回放")
-                    .font(.system(size: 12))
+                    .font(.ui(12))
                     .foregroundStyle(Palette.pink)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 5)

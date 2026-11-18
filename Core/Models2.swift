@@ -550,6 +550,34 @@ struct SpaceInfoData: Decodable {
     let level: Int?
 }
 
+/// 用户关系统计，粉丝数与关注数以此为准（空间资料接口本身不带这两个值）。
+struct RelationStatData: Decodable {
+    let mid: Int?
+    let following: Int?
+    let follower: Int?
+}
+
+/// 粉丝 / 关注列表的通用返回（粉丝接口用 count，关注接口用 total）。
+struct SpaceUserListData: Decodable {
+    let list: [SpaceUserDTO]?
+    let count: Int?
+    let total: Int?
+}
+
+struct SpaceUserDTO: Decodable {
+    let mid: Int?
+    let uname: String?
+    let face: String?
+    let sign: String?
+}
+
+struct SpaceUser: Identifiable, Hashable {
+    var id: Int
+    var name: String
+    var face: String
+    var sign: String
+}
+
 /// App 端空间接口的返回，只用到个人资料里的所在地。
 struct AppSpaceData: Decodable {
     let card: AppSpaceCard?

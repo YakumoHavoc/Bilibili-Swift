@@ -586,6 +586,45 @@ enum BiliAPI {
         )
     }
 
+    /// 粉丝数 / 关注数，公开接口，无需登录。
+    static func relationStat(mid: Int) async throws -> RelationStatData {
+        try await BiliClient.shared.get(
+            "https://api.bilibili.com/x/relation/stat",
+            params: ["vmid": String(mid)],
+            referer: "https://space.bilibili.com/\(mid)"
+        )
+    }
+
+    /// 粉丝列表（需要登录，接口有风控，需 wbi 签名）。
+    static func spaceFans(mid: Int, page: Int = 1, pageSize: Int = 30) async throws -> SpaceUserListData {
+        try await BiliClient.shared.get(
+            "https://api.bilibili.com/x/relation/fans",
+            params: [
+                "vmid": String(mid),
+                "pn": String(page),
+                "ps": String(pageSize),
+                "order": "desc"
+            ],
+            referer: "https://space.bilibili.com/\(mid)/fans/fans",
+            signed: true
+        )
+    }
+
+    /// 关注列表（需要登录，对方未公开时接口会报错）。
+    static func spaceFollowings(mid: Int, page: Int = 1, pageSize: Int = 30) async throws -> SpaceUserListData {
+        try await BiliClient.shared.get(
+            "https://api.bilibili.com/x/relation/followings",
+            params: [
+                "vmid": String(mid),
+                "pn": String(page),
+                "ps": String(pageSize),
+                "order": "attention"
+            ],
+            referer: "https://space.bilibili.com/\(mid)/fans/follow",
+            signed: true
+        )
+    }
+
     static func spaceVideos(mid: Int, page: Int = 1) async throws -> SpaceVideoData {
         try await BiliClient.shared.get(
             "https://api.bilibili.com/x/space/wbi/arc/search",
